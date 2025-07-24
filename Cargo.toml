@@ -1,0 +1,9 @@
+[package]
+name = "rtos-riscv-do178c"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+RISC = "0.1.0"
+panic-halt = "1.0.0"
+riscv-rt = "0.15.0"

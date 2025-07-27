@@ -116,7 +116,14 @@ dependencies = [
  "RISC",
  "panic-halt",
  "riscv-rt",
+ "sbi",
 ]
+
+[[package]]
+name = "sbi"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c64a569a412de4ad7b123f429e434751d74dd7ed25654af962b93c4d1cd584e"
 
 [[package]]
 name = "syn"

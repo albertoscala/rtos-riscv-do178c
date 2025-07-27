@@ -6,4 +6,11 @@ edition = "2021"
 [dependencies]
 RISC = "0.1.0"
 panic-halt = "1.0.0"
-riscv-rt = "0.15.0"
+riscv-rt = {version = "0.15.0", features = ["s-mode"]}
+sbi = "0.3.0"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

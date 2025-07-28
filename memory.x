@@ -2,7 +2,7 @@
 
 MEMORY
 {
-  RAM : ORIGIN = 0x80200000, LENGTH = 16M
+  RAM : ORIGIN = 0x80000000, LENGTH = 16M
 }
 
 /* Link-time aliases that riscv-rt expects ------------- */

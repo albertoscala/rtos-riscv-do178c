@@ -2,15 +2,29 @@
 name = "rtos-riscv-do178c"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
+
+[[bin]]
+name = "rtos-riscv-do178c"
+path = "src/main.rs"
+harness = false
 
 [dependencies]
 RISC = "0.1.0"
 panic-halt = "1.0.0"
-riscv-rt = {version = "0.15.0", features = ["s-mode"]}
+riscv = "0.14.0"
+riscv-rt = "0.15.0"
 sbi = "0.3.0"
+
+[build-dependencies]
+cc = "1.0"
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
+
+# Add this section to make sure .S files get compiled
+[package.metadata.cargo-xbuild]
+default-target = "riscv64imac-unknown-none-elf"

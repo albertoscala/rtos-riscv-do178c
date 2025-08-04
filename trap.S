@@ -4,8 +4,6 @@
 trap_entry:
     # Allocate stack space
     addi sp, sp, -128
-
-    # Save registers
     sd ra, 0*8(sp)
     sd t0, 1*8(sp)
     sd t1, 2*8(sp)
@@ -23,7 +21,16 @@ trap_entry:
     sd t5, 14*8(sp)
     sd t6, 15*8(sp)
 
-    # Call Rust handler
+    # Save mepc and mcause to the stack too
+    csrr t0, mepc
+    sd t0, 16*8(sp)
+    csrr t1, mcause
+    sd t1, 17*8(sp)
+    csrr t2, mtval
+    sd t2, 18*8(sp)
+
+    # Pass sp pointer to Rust handler (so it can inspect mcause/mepc)
+    mv a0, sp
     call trap_handler
 
     # Restore registers

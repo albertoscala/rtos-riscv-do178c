@@ -12,5 +12,6 @@ runner = [
 ]
 rustflags = [
   "-C", "link-arg=-Tmemory.x",
-  "-C", "link-arg=-Tlink.ld"
+  "-C", "link-arg=-Tlink.ld",
+  "-C", "target-feature=+zicsr"
 ]

@@ -2,8 +2,9 @@
     .globl trap_entry
     .align 4
 trap_entry:
-    # Allocate stack space
-    addi sp, sp, -128
+    # Allocate stack space: 20 * 8 = 160 bytes (RV64)
+    addi sp, sp, -160
+
     sd ra, 0*8(sp)
     sd t0, 1*8(sp)
     sd t1, 2*8(sp)
@@ -21,19 +22,26 @@ trap_entry:
     sd t5, 14*8(sp)
     sd t6, 15*8(sp)
 
-    # Save mepc and mcause to the stack too
     csrr t0, mepc
-    sd t0, 16*8(sp)
+    sd   t0, 16*8(sp)
     csrr t1, mcause
-    sd t1, 17*8(sp)
+    sd   t1, 17*8(sp)
     csrr t2, mtval
-    sd t2, 18*8(sp)
+    sd   t2, 18*8(sp)
 
-    # Pass sp pointer to Rust handler (so it can inspect mcause/mepc)
-    mv a0, sp
-    call trap_handler
+    # Call Rust: a0 = current SP (frame base)
+    mv   a0, sp
+    call trap_handler        # extern "C" fn trap_handler(*mut usize) -> *mut usize
 
-    # Restore registers
+    # === context switch point ===
+    # Use the SP returned in a0 (may be a different task's frame)
+    mv   sp, a0
+
+    # Restore mepc from the frame (slot 16) before mret
+    ld   t0, 16*8(sp)
+    csrw mepc, t0
+
+    # Restore saved regs
     ld ra, 0*8(sp)
     ld t0, 1*8(sp)
     ld t1, 2*8(sp)
@@ -51,5 +59,5 @@ trap_entry:
     ld t5, 14*8(sp)
     ld t6, 15*8(sp)
 
-    addi sp, sp, 128
+    addi sp, sp, 160
     mret

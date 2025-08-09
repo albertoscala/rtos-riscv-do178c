@@ -15,3 +15,15 @@ REGION_ALIAS("REGION_STACK",  RAM);
 
 /* Make the stack grow *down* from the top of RAM */
 _stack_start = ORIGIN(RAM) + LENGTH(RAM);
+
+
+/* extra-sections.x */
+SECTIONS
+{
+  .tasks (NOLOAD) : ALIGN(16)
+  {
+    __task_stack_start = .;
+    . += 64K;   /* 64 KiB total budget for all task stacks */
+    __task_stack_end = .;
+  } > RAM
+} INSERT AFTER .bss;

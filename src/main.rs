@@ -4,7 +4,7 @@
 use core::panic::PanicInfo;
 
 use riscv_rt::entry;
-use riscv::register::{mcause, mepc, mie, mip, mstatus, mtvec::{self, Mtvec, TrapMode}};
+use riscv::register::{mcause, mepc, mie, mip, mstatus, mtval, mtvec::{self, Mtvec, TrapMode}};
 use riscv::interrupt::{Exception, Interrupt};
 
 /// QEMU ‘virt’ board UART0 base address
@@ -229,6 +229,11 @@ pub extern "C" fn trap_handler(sp: *mut usize) -> *mut usize{
                 2 => handle_illegal(),       // Illegal Instruction
                 5 => handle_mem_fault(),     // Load access fault
                 7 => handle_mem_fault(),     // Store/AMO access fault
+                11 => { // ECALL from M-mode = task_yield()
+                    // skip the ecall instruction so we don't re-execute it after mret
+                    *sp.offset(OFF_MEPC) = mepc_val.wrapping_add(4);
+                    return schedule(sp);   // always reschedule on voluntary yield
+                }
                 _ => panic!("Generic Exception"),
             }
             return sp;
@@ -254,6 +259,9 @@ fn init_timer(ticks: u64) {
 // re-arms the timer
 fn timer_interrupt() {
     unsafe {
+        // bump RTOS tick
+        rtos_on_timer_tick();
+
         let now = core::ptr::read_volatile(MTIME);
         core::ptr::write_volatile(MTIMECMP, now + 10_000);
     }
@@ -301,55 +309,70 @@ fn put_dec(mut val: usize) {
     }
 }
 
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    // --- lock down interrupts so we don't re-enter while printing ---
+    unsafe {
+        mstatus::clear_mie(); // global mask
+
+        mie::clear_mext();    // MEIE
+        mie::clear_mtimer();  // MTIE
+        mie::clear_msoft();   // MSIE   <-- this is the one you want
+    }
+
     puts("=== PANIC ===\n");
 
     if let Some(location) = info.location() {
-        puts("File: ");
-        puts(location.file());
-        puts("\n");
-        puts("Line: ");
-        put_dec(location.line() as usize);
-        puts("\n");
+        puts("File: "); puts(location.file()); puts("\n");
+        puts("Line: "); put_dec(location.line() as usize); puts("\n");
     }
 
-    // Read trap cause and PC for diagnostics
     let cause = mcause::read();
-    let pc = mepc::read();
+    let pc    = mepc::read();
+    let tval  = mtval::read(); // extra fault info (addr or instruction)
 
-    puts("Raw mcause bits: 0x");
-    put_hex(cause.bits());
-    puts("\n");
+    puts("Raw mcause bits: 0x"); put_hex(cause.bits()); puts("\n");
 
-    puts("Cause: ");
     match cause.cause() {
-        riscv::register::mcause::Trap::Exception(e) => {
-            puts("Exception\n");
-            match e {
-                2 => puts("Illegal instruction\n"),   // Illegal instruction
-                5 => puts("Load access fault\n"),     // Load access fault
-                7 => puts("Store/AMO access fault\n"),// Store/AMO access fault
-                _ => puts("Other Exception\n"),
+        mcause::Trap::Exception(code) => {
+            puts("Cause: Exception (code "); put_dec(code as usize); puts(")\n");
+            // Disambiguate common exception codes
+            match code {
+                0  => puts("Instruction address misaligned\n"),
+                1  => puts("Instruction access fault\n"),
+                2  => puts("Illegal instruction\n"),
+                3  => puts("Breakpoint\n"),
+                4  => puts("Load address misaligned\n"),
+                5  => puts("Load access fault\n"),
+                6  => puts("Store/AMO address misaligned\n"),
+                7  => puts("Store/AMO access fault\n"),
+                8  => puts("Environment call from U-mode\n"),
+                9  => puts("Environment call from S-mode\n"),
+                11 => puts("Environment call from M-mode (ECALL / task_yield)\n"),
+                12 => puts("Instruction page fault\n"),
+                13 => puts("Load page fault\n"),
+                15 => puts("Store/AMO page fault\n"),
+                _  => puts("Other Exception\n"),
             }
-            // You can refine this with e.g. check e == IllegalInstruction
         }
-        riscv::register::mcause::Trap::Interrupt(i) => {
-            puts("Interrupt\n");
-            match i {
-                7 => puts("Machine Timer Interrupt\n"),
-                11 => puts("Machine External Interrupt\n"),
-                _ => puts("Other Interrupt\n"),
+        mcause::Trap::Interrupt(code) => {
+            puts("Cause: Interrupt (code "); put_dec(code as usize); puts(")\n");
+            // Disambiguate common interrupt codes
+            match code {
+                3  => puts("Machine Software Interrupt\n"),
+                7  => puts("Machine Timer Interrupt\n"),
+                11 => puts("Machine External Interrupt (PLIC)\n"),
+                _  => puts("Other Interrupt\n"),
             }
-            // Likewise: MachineTimer, MachineExternal, etc.
         }
     }
 
-    puts("PC: 0x");
-    put_hex(pc);
-    puts("\n");
+    puts("mepc (PC): 0x"); put_hex(pc); puts("\n");
+    puts("mtval    : 0x"); put_hex(tval); puts("\n");
 
-    loop {} // Halt deterministically
+    // Stay halted deterministically
+    loop { core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst); }
 }
 
 fn external_interrupt() -> bool {
@@ -368,8 +391,102 @@ fn handle_mem_fault() {
     panic!("Memory access fault");
 }
 
+// ===== kernel_services.rs (can live at bottom of main.rs) =====
+use core::cell::UnsafeCell;
+use core::hint::spin_loop;
+use core::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering::{Acquire, Release, AcqRel, Relaxed}};
+
+/// Your timer currently re-arms with +10_000 on QEMU virt (mtime ≈ 10 MHz) ⇒ 1 ms tick.
+pub const TICK_HZ: u64 = 1000;
+
+// ---------- timebase ----------
+static TICKS: AtomicU64 = AtomicU64::new(0);
+
+#[inline] pub fn ticks() -> u64 { TICKS.load(Relaxed) }
+
+#[inline]
+pub const fn ms_to_ticks(ms: u64) -> u64 { ((ms * TICK_HZ) + 999) / 1000 }
+
+/// Called from the timer interrupt.
+#[no_mangle]
+pub extern "C" fn rtos_on_timer_tick() {
+    TICKS.fetch_add(1, Relaxed);
+}
+
+// ---------- yield ----------
+#[inline(always)]
+pub fn task_yield() {
+    unsafe { core::arch::asm!("ecall", options(nostack, nomem)) }
+}
+
+// ---------- delay ----------
+pub fn delay_ms(ms: u64) {
+    let deadline = ticks().wrapping_add(ms_to_ticks(ms));
+    while (ticks().wrapping_sub(deadline) as i64) < 0 {
+        task_yield();
+    }
+}
+
+// ---------- SpinLock ----------
+pub struct SpinLock<T: ?Sized> {
+    locked: AtomicBool,
+    data: UnsafeCell<T>,
+}
+unsafe impl<T: ?Sized + Send> Send for SpinLock<T> {}
+unsafe impl<T: ?Sized + Send> Sync for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    pub const fn new(value: T) -> Self {
+        Self { locked: AtomicBool::new(false), data: UnsafeCell::new(value) }
+    }
+    pub fn lock(&self) -> SpinLockGuard<'_, T> {
+        while self.locked.compare_exchange(false, true, AcqRel, Acquire).is_err() {
+            for _ in 0..32 { spin_loop(); }
+            task_yield();
+        }
+        SpinLockGuard { lock: self }
+    }
+}
+pub struct SpinLockGuard<'a, T: ?Sized> { lock: &'a SpinLock<T> }
+impl<'a, T: ?Sized> core::ops::Deref for SpinLockGuard<'a, T> {
+    type Target = T; fn deref(&self) -> &T { unsafe { &*self.lock.data.get() } }
+}
+impl<'a, T: ?Sized> core::ops::DerefMut for SpinLockGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T { unsafe { &mut *self.lock.data.get() } }
+}
+impl<'a, T: ?Sized> Drop for SpinLockGuard<'a, T> {
+    fn drop(&mut self) { self.lock.locked.store(false, Release); }
+}
+
+// ---------- CountingSemaphore (cooperative) ----------
+pub struct Semaphore { count: AtomicIsize }
+impl Semaphore {
+    pub const fn new(initial: isize) -> Self { Self { count: AtomicIsize::new(initial) } }
+    pub fn wait(&self) {
+        loop {
+            let c = self.count.load(Acquire);
+            if c > 0 && self.count.compare_exchange(c, c - 1, AcqRel, Acquire).is_ok() {
+                return;
+            }
+            task_yield();
+        }
+    }
+    pub fn post(&self) { self.count.fetch_add(1, Release); }
+    pub fn try_wait(&self) -> bool {
+        let mut c = self.count.load(Acquire);
+        while c > 0 {
+            match self.count.compare_exchange(c, c - 1, AcqRel, Acquire) {
+                Ok(_) => return true,
+                Err(cur) => c = cur,
+            }
+        }
+        false
+    }
+}
+
 // Main
 
+/* 
 #[entry]
 fn main() -> ! {
     
@@ -413,4 +530,86 @@ fn main() -> ! {
         start_first_task();
     }
 
+}
+*/
+
+static UART_LOCK: SpinLock<()> = SpinLock::new(());
+static SEM: Semaphore = Semaphore::new(0);
+
+#[entry]
+fn main() -> ! {
+    unsafe {
+        // Show .tasks region (as you already had)
+        let base = &__task_stack_start as *const u8 as usize;
+        let end  = &__task_stack_end   as *const u8 as usize;
+        puts(".tasks base: 0x"); put_hex(base); puts("\n");
+        puts(".tasks end : 0x"); put_hex(end ); puts("\n");
+        puts(".tasks size: 0x"); put_hex(end - base); puts("\n");
+
+        // Set trap entry and start timer (1ms tick with +10_000 @ 10MHz)
+        let mtvec_value = Mtvec::from_bits(trap_entry as usize);
+        mtvec::write(mtvec_value);
+        init_timer(10_000);
+
+        let current = mtvec::read();
+        if current.trap_mode() == TrapMode::Direct {
+            puts("TrapMode is actually Direct!\n");
+        }
+        if current.address() == (trap_entry as usize) & !0x3  {
+            puts("Trap Entry is correct!\n");
+        }
+
+        // --- Demo tasks ---
+
+        extern "C" fn periodic_500ms() {
+            loop {
+                // use the UART lock so lines don’t interleave mid-print
+                let _g = UART_LOCK.lock();
+                puts("[500ms] tick=");
+                put_dec(ticks() as usize);
+                puts("\n");
+                drop(_g);
+                delay_ms(500);
+            }
+        }
+
+        extern "C" fn producer_200ms() {
+            loop {
+                delay_ms(200);
+                SEM.post();
+                let _g = UART_LOCK.lock();
+                puts("[prod] +1\n");
+                drop(_g);
+            }
+        }
+
+        extern "C" fn consumer_blocking() {
+            loop {
+                SEM.wait(); // cooperative: yields while waiting
+                let _g = UART_LOCK.lock();
+                puts("[cons] got token at tick ");
+                put_dec(ticks() as usize);
+                puts("\n");
+                drop(_g);
+            }
+        }
+
+        extern "C" fn yield_spammer() {
+            loop {
+                {
+                    let _g = UART_LOCK.lock();
+                    puts("[yield]\n");
+                }
+                task_yield(); // voluntary context switch via ECALL
+            }
+        }
+
+        // Create tasks (all same priority → round-robin + preemption by timer)
+        let _t0 = create_task(periodic_500ms,   1);
+        let _t1 = create_task(producer_200ms,   1);
+        let _t2 = create_task(consumer_blocking,1);
+        let _t3 = create_task(yield_spammer,    1);
+
+        start_first_task();
+    }
 }

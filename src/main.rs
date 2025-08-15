@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![allow(unused)]
 
 use riscv_rt::entry;
 use riscv::register::mtvec::{self, Mtvec, TrapMode};

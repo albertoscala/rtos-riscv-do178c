@@ -23,7 +23,7 @@ A small cooperative RTOS providing: system tick, task management, semaphore/lock
 1. **Boot**: assembly startup → Rust `main` (or `entry`) → `init_timer(+ticks)` → task creation → `start_first_task()` → `__rtos_boot_with_sp`.  
 2. **Tick**: timer interrupt → `timer_interrupt()` → `rtos_on_timer_tick()` (increments ticks, unblocks delays) → return to preempted context (cooperative scheduling otherwise).  
 3. **Yield/Block**: tasks call `task_yield()` or `delay_ms()`/`Semaphore::wait()`, transitioning state to **Blocked/Ready**.  
-4. **Trap/Fault**: `trap_handler` distinguishes timer vs. external vs. exceptions; faults call panic.
+4. **Trap/Fault**: `trap_handler` distinguishes timer vs. exceptions; faults call panic.
 
 ### 2.3 Data Design
 - **TCB (`task.rs`)**  
@@ -52,7 +52,7 @@ A small cooperative RTOS providing: system tick, task management, semaphore/lock
 ### 2.6 Memory
 - Per‑task stack: 4096 B (configurable).  
 - Task stacks placed in linker‑defined `.tasks` region (`__task_stack_start/end`).  
-- Trap frame size: `FRAME_WORDS = 20` (saved registers in assembly).
+- Trap frame size: `FRAME_WORDS = 20` (saved registers in assembly) (19 used, 1 for padding).
 
 ### 2.7 Error Handling
 - Illegal instruction or memory fault → panic.  
@@ -77,7 +77,6 @@ A small cooperative RTOS providing: system tick, task management, semaphore/lock
 | HLR‑9 | Timer init & first task | `timer.rs`, `task.rs` |
 | HLR‑10| Arch externs | `mod.rs` |
 
-## 4. Assumptions and TBDs
-- DAL level to be assigned.  
-- External interrupts/PLIC integration not yet implemented (stub returns false).  
-- Assembly context switch (`trap_entry`, save/restore) provided separately and must match `OFF_*` layout.
+## 4. Assumptions 
+- DAL level to be assigned (For this project, DAL is not assigned (research/demo context)).  
+- Assembly context switch (`trap_entry`, save/restore) provided separately and must match `OFF_*` layout. Verified, 19 values saved, 1 extra slot used for alignment or extra registries.

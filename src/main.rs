@@ -16,6 +16,7 @@ use drivers::uart::{puts, put_dec, put_hex};
 use kernel::services::{delay_ms, task_yield, ticks, Semaphore, SpinLock};
 use kernel::task::{create_task, start_first_task};
 
+//TODO: Capire da dove li va a prendere
 extern "C" {
     static __task_stack_start: u8;
     static __task_stack_end:   u8;
@@ -34,7 +35,7 @@ fn main() -> ! {
         puts(".tasks end : 0x"); put_hex(end ); puts("\n");
         puts(".tasks size: 0x"); put_hex(end - base); puts("\n");
 
-        // Trap vector + 1ms timer tick (+10_000 at ≈10 MHz on QEMU virt)
+        // Trap vector + 1ms timer tick (+10_000 at =10 MHz on QEMU virt)
         let mtvec_value = Mtvec::from_bits(trap_entry as usize);
         mtvec::write(mtvec_value);
         init_timer(10_000);

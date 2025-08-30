@@ -23,7 +23,7 @@ SECTIONS
   .tasks (NOLOAD) : ALIGN(16)
   {
     __task_stack_start = .;
-    . += 64K;   /* 64 KiB total budget for all task stacks */
+    . += 16K;   /* 16 KiB total budget for all task stacks */
     __task_stack_end = .;
   } > RAM
 } INSERT AFTER .bss;

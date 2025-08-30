@@ -5,7 +5,7 @@ use core::sync::atomic::{
     Ordering::{Acquire, Release, AcqRel, Relaxed}
 };
 
-/// Timer re-arms with +10_000 on QEMU virt (mtime ≈10 MHz) ⇒ 1 ms tick.
+// Timer re-arms with +10_000 on QEMU virt (mtime =10 MHz) ⇒ 1 ms tick. Logic tick
 pub const TICK_HZ: u64 = 1000;
 
 // ---------- timebase ----------

@@ -23,12 +23,7 @@ pub extern "C" fn trap_handler(sp: *mut usize) -> *mut usize {
                 7  => { // Machine Timer
                     timer_interrupt();
                     return schedule(sp);
-                }
-                11 => { // Machine External
-                    let need = external_interrupt();
-                    if need { return schedule(sp); }
-                    return sp;
-                }
+                },
                 _  => panic!("Generic Interrupt"),
             }
         } else {
@@ -45,14 +40,6 @@ pub extern "C" fn trap_handler(sp: *mut usize) -> *mut usize {
             sp
         }
     }
-}
-
-fn external_interrupt() -> bool {
-    // 1) PLIC claim -> irq_id
-    // 2) Minimal work
-    // 3) If a higher-priority task wakes: return true
-    // 4) PLIC complete(irq_id)
-    false
 }
 
 fn handle_illegal() {

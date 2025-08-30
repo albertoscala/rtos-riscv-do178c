@@ -1,7 +1,7 @@
 # Software Requirements Data (SRD)
-**Project:** Minimal RTOS in Rust for RISC‑V (M‑mode)  
+**Progetto:** Minimal RTOS in Rust for RISC‑V (M‑mode)  
 **Standard:** DO‑178C (objectives addressed to the extent applicable for a minimal RTOS)  
-**Date:** 2025-08-15
+**Data:** 2025-08-15
 
 ## 1. Purpose and Scope
 This SRD captures software requirements for a minimal real‑time operating system (RTOS) targeting RISC‑V (RV64) in Machine mode on the QEMU `virt` platform. The RTOS provides a tiny kernel with cooperative/task‑yield scheduling, a 1 ms system tick, basic inter‑task synchronization, and UART console I/O for observability. The goal is to express **clear, verifiable, and traceable** requirements aligned with DO‑178C principles.

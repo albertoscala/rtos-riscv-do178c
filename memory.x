@@ -16,8 +16,7 @@ REGION_ALIAS("REGION_STACK",  RAM);
 /* Make the stack grow *down* from the top of RAM */
 _stack_start = ORIGIN(RAM) + LENGTH(RAM);
 
-
-/* extra-sections.x */
+/* extra-sections */
 SECTIONS
 {
   .tasks (NOLOAD) : ALIGN(16)

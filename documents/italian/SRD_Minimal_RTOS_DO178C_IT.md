@@ -1,32 +1,40 @@
 # Software Requirements Data (SRD)  
-**Progetto:** Minimal RTOS in Rust per RISC-V (M-mode)  
-**Standard di riferimento:** DO-178C (obiettivi applicabili a un RTOS minimale)  
-**Data:** 2025-08-15  
+**Progetto:** RTOS minimale in Rust per RISC-V (M-mode)  
+**Standard di riferimento:** DO-178C (obiettivi applicabili a un RTOS minimale)
+**Data:** 2025-08-31  
 
 ---
 
 ## 1. Scopo  
-Il presente documento definisce i requisiti software per un sistema operativo real-time minimale (RTOS) sviluppato in Rust per architettura RISC-V (RV64) in modalità *Machine* (M-mode), eseguito sulla piattaforma QEMU `virt`.  
-L’RTOS fornisce un piccolo kernel con scheduling cooperativo (task-yield), tick di sistema a 1 ms, primitive di sincronizzazione di base e I/O su UART per l’osservabilità.  
-L’obiettivo è descrivere requisiti **chiari, verificabili e tracciabili**, in linea con i principi del DO-178C.  
+Il presente documento definisce i requisiti software per un sistema operativo real-time minimale (RTOS) sviluppato in Rust per architettura RISC-V (RV64) in modalità *Machine* (M-mode), eseguito su macchina virtuale QEMU (`virt`).  
+L’RTOS fornisce un piccolo kernel con scheduling cooperativo (`task-yield`), tick di sistema a 1 ms, primitive di sincronizzazione di base e I/O su UART per debug e/o logging.  
+L’obiettivo è descrivere requisiti **chiari, verificabili e tracciabili**, in linea con i principi della DO-178C.  
 
 **Fuori dal perimetro**: protezione memoria (MMU/MPU), file system, stack di rete, modalità *User*. I moduli assembly di bootstrap e di cambio contesto sono trattati come interfacce esterne.  
 
 ---
 
 ## 2. Riferimenti  
-- Codice sorgente: `main.rs`, `panic_handler.rs`, `task.rs`, `services.rs`, `uart.rs`, `trap.rs`, `timer.rs`, `mod.rs`  
-- Hardware: QEMU `virt`; CLINT/MTIME e UART0 (MMIO).  
+- Codice sorgente: 
+  - `main.rs`, 
+  - `panic_handler.rs`, 
+  - `task.rs`, 
+  - `services.rs`, 
+  - `uart.rs`, 
+  - `trap.rs`, 
+  - `timer.rs`, 
+  - `mod.rs`  
+- Hardware: QEMU `virt`; con CLINT/MTIME e UART0 (MMIO).  
 - Standard: DO-178C (RTCA DO-178C / EUROCAE ED-12C).  
 
 ---
 
 ## 3. Ambiente Operativo e Vincoli  
 - **CPU**: RISC-V RV64 in modalità Machine.  
-- **Timer**: CLINT MTIME/MTIMECMP ≈10 MHz (QEMU `virt`).  
-- **UART0**: base `0x1000_0000`, TX offset 0, LSR offset 5.  
-- **Interrupt**: usati solo interrupt di Machine Timer; interrupt esterni/soft riservati.  
-- **Build**: `no_std`, bare-metal, linguaggio Rust.  
+- **Timer**: CLINT MTIME/MTIMECMP =10 MHz (QEMU `virt`).  
+- **UART0**: base `0x1000_0000`, TX a offset 0 e LSR a offset 5.  
+- **Interrupt**: utilizzati esclusivamente gli interrupt di Machine Timer; gli interrupt esterni e software non sono gestiti.  
+- **Build**: il sistema è sviluppato in Rust, compilato per il target `riscv64imac-unknown-none-elf` ed eseguito senza libreria standard (`no_std`).  
 
 ---
 
@@ -39,7 +47,7 @@ L’obiettivo è descrivere requisiti **chiari, verificabili e tracciabili**, in
 ---
 
 ## 5. Requisiti Funzionali di Alto Livello (HLR)  
-- **HLR-1 — Clock/Tick**: Il kernel deve mantenere un contatore monotono con periodo di 1 ms tramite interrupt di Machine Timer.  
+- **HLR-1 — Clock/Tick**: Il kernel deve mantenere un contatore di sistema che si incrementa regolarmente ogni 1 ms tramite interrupt di Machine Timer.
 - **HLR-2 — Scheduler**: Il kernel deve gestire fino a 4 task concorrenti, eseguendone uno per volta.  
 - **HLR-3 — API Task**: Il kernel deve fornire API per creare task, cedere la CPU (*yield*) e avviare il primo task.  
 - **HLR-4 — Delay**: Il kernel deve fornire un servizio di attesa temporizzata in millisecondi.  
@@ -60,7 +68,7 @@ L’obiettivo è descrivere requisiti **chiari, verificabili e tracciabili**, in
 - **LLR-5 — Contenuto TCB**: Ogni TCB deve includere SP, entry, stato, priorità, limiti stack. (`task.rs`)  
 - **LLR-6 — Avvio Primo Task**: `start_first_task()` deve avviare il primo Ready task tramite `__rtos_boot_with_sp`. (`task.rs`, `mod.rs`)  
 - **LLR-7 — Yield**: `task_yield()` deve passare la CPU al prossimo Ready di pari priorità. (`services.rs`, `task.rs`)  
-- **LLR-8 — Correttezza Semaforo**: `wait()` blocca se count==0; `post()` incrementa; `try_wait()` decrementa se count>0. (`services.rs`)  
+- **LLR-8 — Correttezza Semaforo**: `wait()` blocca se `count==0`; `post()` incrementa; `try_wait()` decrementa se count>0. (`services.rs`)  
 - **LLR-9 — SpinLock**: `lock()` attende attivamente, `release()` su drop. (`services.rs`)  
 - **LLR-10 — UART TX**: `puts`, `put_hex`, `put_dec` devono scrivere via polling. (`uart.rs`)  
 - **LLR-11 — Decodifica Trap**: `trap_handler` deve leggere `mcause` e `mepc`, gestendo timer ed eccezioni. (`trap.rs`)  
@@ -97,13 +105,37 @@ Ogni requisito HLR/LLR/NFR è verificato tramite casi di test nel documento **SV
 
 ---
 
-## 11. Tracciabilità (Estratto)  
-| Req ID | Design/Code | Verifica |
-|--------|-------------|----------|
-| HLR-1  | `timer.rs::init_timer`, `timer_interrupt`; `services.rs::rtos_on_timer_tick` | SV-1, SV-2 |
-| HLR-2  | `task.rs` scheduler | SV-3, SV-4 |
-| HLR-5  | `services.rs::Semaphore` | SV-6 |
-| LLR-12 | `timer.rs::timer_interrupt` | SV-2 |
-| NFR-2  | allocazioni statiche in `task.rs`, `extra-sections.x` | SV-7 |
+## 11. Matrice di Tracciabilità
+
+| Req ID  | Design/Code Reference                                           | Verifica (SVCP) |
+|---------|-----------------------------------------------------------------|-----------------|
+| HLR-1   | `timer.rs::init_timer`, `timer_interrupt`; `services.rs::rtos_on_timer_tick` | TBD |
+| HLR-2   | `task.rs` (TCB, scheduler helpers)                              | TBD |
+| HLR-3   | `task.rs::create_task`, `task.rs::start_first_task`, `services.rs::task_yield`, `mod.rs::__rtos_boot_with_sp` | TBD |
+| HLR-4   | `services.rs::delay_ms`                                         | TBD |
+| HLR-5   | `services.rs::Semaphore`                                        | TBD |
+| HLR-6   | `services.rs::SpinLock`                                         | TBD |
+| HLR-7   | `uart.rs::puts`, `put_hex`, `put_dec`                           | TBD |
+| HLR-8   | `trap.rs::trap_handler`, `panic_handler.rs::panic_handler`      | TBD |
+| HLR-9   | `timer.rs::init_timer`, `task.rs::start_first_task`             | TBD |
+| HLR-10  | `mod.rs::trap_entry`, `__rtos_boot_with_sp`                     | TBD |
+| LLR-1   | `timer.rs::init_timer` (+10_000)                                | TBD |
+| LLR-2   | `services.rs::ticks`                                            | TBD |
+| LLR-3   | `services.rs::delay_ms`                                         | TBD |
+| LLR-4   | `task.rs::MAX_TASKS`, `TASK_STACK_BYTES`                        | TBD |
+| LLR-5   | `task.rs::TCB` (campi: SP, entry, state, priority, stack)       | TBD |
+| LLR-6   | `task.rs::start_first_task`, `mod.rs::__rtos_boot_with_sp`      | TBD |
+| LLR-7   | `services.rs::task_yield`                                       | TBD |
+| LLR-8   | `services.rs::Semaphore::{wait,post,try_wait}`                  | TBD |
+| LLR-9   | `services.rs::SpinLock`                                         | TBD |
+| LLR-10  | `uart.rs::{puts, put_hex, put_dec}`                             | TBD |
+| LLR-11  | `trap.rs::trap_handler` (mcause, mepc decode)                   | TBD |
+| LLR-12  | `timer.rs::timer_interrupt`                                     | TBD |
+| LLR-13  | `panic_handler.rs::panic_handler`                               | TBD |
+| LLR-14  | `mod.rs::OFF_*` costanti + `trap.S` frame                       | TBD |
+| NFR-1   | determinismo O(1) in servizi (`services.rs`, `task.rs`)         | TBD |
+| NFR-2   | allocazioni statiche (`task.rs`, `extra-sections.x`)            | TBD |
+| NFR-3   | footprint `.tasks` 16 KiB (`extra-sections.x`)                  | TBD |
+| NFR-4   | gestione errori → panic (`panic_handler.rs`, `trap.rs`)         | TBD |
 
 ---

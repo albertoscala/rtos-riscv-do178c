@@ -1,10 +1,11 @@
 # Software Design Description (SDD)  
-**Progetto:** Minimal RTOS in Rust per RISC-V (M-mode)  
-**Data:** 2025-08-15  
+**Progetto:** RTOS minimale in Rust per RISC-V (M-mode)  
+**Data:** 2025-08-31  
 
 ---
 
-## 1. Panoramica  
+## 1. Panoramica
+
 Un piccolo RTOS cooperativo che fornisce: tick di sistema, gestione task, primitive di sincronizzazione (semaforo/spinlock), console UART e gestione trap/panic. Il codice assembly fornisce l’entry point delle trap e il bootstrap del primo task.  
 
 ---
@@ -13,8 +14,8 @@ Un piccolo RTOS cooperativo che fornisce: tick di sistema, gestione task, primit
 
 ### 2.1 Struttura dei Moduli  
 - **arch/**  
-  - `mod.rs` — costanti del frame di trap e dichiarazioni `extern` (`trap_entry`, `__rtos_boot_with_sp`, simboli per gli stack dei task).  
-  - `trap.rs` — `trap_handler` legge `mcause`/`mepc`/`mtval` e smista verso ISR del timer o gestori di fault.  
+  - `mod.rs` — definizioni delle costanti del trap frame e dichiarazioni `extern` (`trap_entry`, `__rtos_boot_with_sp`, simboli per gli stack dei task).  
+  - `trap.rs` — `trap_handler` legge `mcause`/`mepc` e smista verso ISR del timer o i fault handler.  
   - `timer.rs` — `init_timer(ticks)`, `timer_interrupt()`.  
 
 - **kernel/**  
@@ -30,8 +31,8 @@ Un piccolo RTOS cooperativo che fornisce: tick di sistema, gestione task, primit
 ---
 
 ### 2.2 Flusso di Controllo  
-1. **Boot**: startup in assembly → Rust `main` (o `entry`) → `init_timer(+ticks)` → creazione task → `start_first_task()` → `__rtos_boot_with_sp`.  
-2. **Tick**: interrupt del timer → `timer_interrupt()` → `rtos_on_timer_tick()` (incrementa tick, sblocca delay) → ritorno al contesto preempted (scheduling cooperativo).  
+1. **Boot**: startup in assembly -> Rust `main` (o `entry`) -> `init_timer(+ticks)` -> creazione task -> `start_first_task()` -> `__rtos_boot_with_sp`.  
+2. **Tick**: interrupt del timer -> `timer_interrupt()` -> `rtos_on_timer_tick()` (incrementa tick, sblocca delay) -> ritorno al contesto preempted (scheduling cooperativo).  
 3. **Yield/Block**: i task chiamano `task_yield()` o `delay_ms()`/`Semaphore::wait()`, passando allo stato **Blocked/Ready**.  
 4. **Trap/Fault**: `trap_handler` distingue timer vs eccezioni; i fault portano a panic.  
 
@@ -65,7 +66,7 @@ Un piccolo RTOS cooperativo che fornisce: tick di sistema, gestione task, primit
 ---
 
 ### 2.5 Temporizzazione  
-- Periodo tick: 1 ms (QEMU `virt` MTIME ≈10 MHz, riarmo +10_000).  
+- Periodo tick: 1 ms (QEMU `virt` MTIME =10 MHz, riarmo +10_000).  
 - WCET ISR: O(1) (riarmo + sblocco), nessuna allocazione dinamica.  
 
 ---
@@ -78,31 +79,50 @@ Un piccolo RTOS cooperativo che fornisce: tick di sistema, gestione task, primit
 ---
 
 ### 2.7 Gestione Errori  
-- Istruzione illegale o fault memoria → panic.  
+- Istruzione illegale o fault memoria -> panic.  
 - Panic: interrupt disabilitati, messaggio emesso, loop infinito.  
 
 ---
 
-### 2.8 Rationale di Progetto  
-- Scheduling cooperativo semplifica l’analisi di determinismo e safety.  
+### 2.8 Criteri e Motivazioni Progettuali
+- Lo scheduling cooperativo semplifica l’analisi di determinismo e safety.  
 - UART in polling riduce la complessità del driver.  
 - Uso di atomiche per tick e semafori, evitando di disabilitare interrupt per sezioni lunghe.  
 
 ---
 
-## 3. Design Dettagliato per Requisito (Tracciabilità)  
-| Req | Elemento di Design | File Sorgente |
-|-----|--------------------|---------------|
-| HLR-1 | Tick e riarmo | `timer.rs`, `services.rs` |
-| HLR-2 | TCB, scheduler helpers | `task.rs` |
-| HLR-3 | API Task & bootstrap | `task.rs`, `mod.rs` |
-| HLR-4 | Servizio Delay | `services.rs` |
-| HLR-5 | Semaforo | `services.rs` |
-| HLR-6 | SpinLock | `services.rs` |
-| HLR-7 | UART TX | `uart.rs` |
-| HLR-8 | Trap & panic | `trap.rs`, `panic_handler.rs` |
-| HLR-9 | Timer init & primo task | `timer.rs`, `task.rs` |
-| HLR-10| Externs architetturali | `mod.rs` |  
+## 3. Matrice di Tracciabilità 
+
+| Req ID  | Design/Code Reference                                           | Verifica (SVCP) |
+|---------|-----------------------------------------------------------------|-----------------|
+| HLR-1   | `timer.rs::init_timer`, `timer_interrupt`; `services.rs::rtos_on_timer_tick` | TBD |
+| HLR-2   | `task.rs` (TCB, scheduler helpers)                              | TBD |
+| HLR-3   | `task.rs::create_task`, `task.rs::start_first_task`, `services.rs::task_yield`, `mod.rs::__rtos_boot_with_sp` | TBD |
+| HLR-4   | `services.rs::delay_ms`                                         | TBD |
+| HLR-5   | `services.rs::Semaphore`                                        | TBD |
+| HLR-6   | `services.rs::SpinLock`                                         | TBD |
+| HLR-7   | `uart.rs::puts`, `put_hex`, `put_dec`                           | TBD |
+| HLR-8   | `trap.rs::trap_handler`, `panic_handler.rs::panic_handler`      | TBD |
+| HLR-9   | `timer.rs::init_timer`, `task.rs::start_first_task`             | TBD |
+| HLR-10  | `mod.rs::trap_entry`, `__rtos_boot_with_sp`                     | TBD |
+| LLR-1   | `timer.rs::init_timer` (+10_000)                                | TBD |
+| LLR-2   | `services.rs::ticks`                                            | TBD |
+| LLR-3   | `services.rs::delay_ms`                                         | TBD |
+| LLR-4   | `task.rs::MAX_TASKS`, `TASK_STACK_BYTES`                        | TBD |
+| LLR-5   | `task.rs::TCB` (campi: SP, entry, state, priority, stack)       | TBD |
+| LLR-6   | `task.rs::start_first_task`, `mod.rs::__rtos_boot_with_sp`      | TBD |
+| LLR-7   | `services.rs::task_yield`                                       | TBD |
+| LLR-8   | `services.rs::Semaphore::{wait,post,try_wait}`                  | TBD |
+| LLR-9   | `services.rs::SpinLock`                                         | TBD |
+| LLR-10  | `uart.rs::{puts, put_hex, put_dec}`                             | TBD |
+| LLR-11  | `trap.rs::trap_handler` (mcause, mepc decode)                   | TBD |
+| LLR-12  | `timer.rs::timer_interrupt`                                     | TBD |
+| LLR-13  | `panic_handler.rs::panic_handler`                               | TBD |
+| LLR-14  | `mod.rs::OFF_*` costanti + `trap.S` frame                       | TBD |
+| NFR-1   | determinismo O(1) in servizi (`services.rs`, `task.rs`)         | TBD |
+| NFR-2   | allocazioni statiche (`task.rs`, `extra-sections.x`)            | TBD |
+| NFR-3   | footprint `.tasks` 16 KiB (`extra-sections.x`)                  | TBD |
+| NFR-4   | gestione errori → panic (`panic_handler.rs`, `trap.rs`)         | TBD |
 
 ---
 

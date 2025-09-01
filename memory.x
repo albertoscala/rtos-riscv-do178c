@@ -1,4 +1,4 @@
-/* memory.x — keeps it dead simple for QEMU virt */
+/* memory.x */
 
 MEMORY
 {

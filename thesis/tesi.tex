@@ -1,0 +1,1907 @@
+\documentclass[italian, Lau, oneside]{sapthesis} % Tesi di laurea triennale
+
+\usepackage[italian]{babel}
+\usepackage[utf8]{inputenx}
+\usepackage{indentfirst}
+\usepackage{microtype}
+\usepackage{lettrine}
+\usepackage{amssymb}
+\linespread{0.9}
+\usepackage[nottoc, notlof, notlot]{tocbibind}
+\usepackage{hyperref}
+\hypersetup{
+    hyperfootnotes=true,
+    bookmarks=true,
+    colorlinks=true,
+    linkcolor=black,
+    linktoc=black,
+    anchorcolor=black,
+    citecolor=red,
+    urlcolor=black,
+    pdftitle={Sviluppo di un RTOS in Rust per RISC-V conforme alle specifiche DO-178C},
+    pdfauthor={Alberto Scala},
+    pdfkeywords={tesi, RTOS, Rust, RISC-V, DO-178C},
+    citecolor=black
+}
+
+\setlength{\parindent}{0pt}
+
+\usepackage{tocloft}
+% schema compilazione
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usepackage{float}
+
+% Indentazione graduale nell'indice
+\setlength{\cftchapindent}{0pt}     % Capitoli senza indentazione
+\setlength{\cftsecindent}{1.5em}    % Sezioni leggermente indentate
+\setlength{\cftsubsecindent}{3em}   % Sottosezioni più indentate
+
+% regola la larghezza della colonna dei numeri (per allineare bene i titoli)
+\setlength{\cftchapnumwidth}{1.5em}   % capitoli: "1", "10", ...
+\setlength{\cftsecnumwidth}{1.5em}    % sezioni: "1.1", "2.10", ...
+\setlength{\cftsubsecnumwidth}{1.5em} % sottosez.: "1.1.1", ...
+
+% (opzionale) riduci lo spazio verticale tra voci
+\setlength{\cftbeforesecskip}{0.3em}
+\setlength{\cftbeforesubsecskip}{0.3em}
+
+% --- RIMUOVERE "Capitolo" E NUMERI ---
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{}{0pt}{} % niente numero, niente "Capitolo"
+\titlespacing*{\chapter}{0pt}{-10pt}{20pt}
+\setcounter{secnumdepth}{0} % Disattiva numerazione anche per sezioni
+
+% --- METADATI TESI ---
+\title{Sviluppo di un RTOS in Rust per RISC-V conforme alle specifiche DO-178C}
+\author{Alberto Scala}
+\IDnumber{1945961}
+\course[]{Informatica}
+\courseorganizer{Facoltà di Informatica}
+\submitdate{Anno Accademico 2024/2025}
+\copyyear{2025}
+\advisor{Prof. Enrico Tronci}
+\authoremail{alberto.scala.it@gmail.com}
+%
+\examdate{}
+\examiner{} 
+\examiner{} 
+\examiner{} 
+\examiner{} 
+\examiner{} 
+\examiner{}
+\examiner{}
+
+\begin{document}
+
+% ---- HEADER FIX ----
+\renewcommand{\leftmark}{}
+\renewcommand{\rightmark}{}
+\renewcommand{\headrulewidth}{0pt}
+% ---------------------
+
+\frontmatter
+\maketitle
+
+\chapter*{Sommario}
+In questa tesi viene presentato lo sviluppo di un kernel real-time minimale scritto in Rust per architetture RISC-V in Machine Mode, progettato seguendo i principi fondamentali dello standard di certificazione avionica DO-178C. 
+
+L’obiettivo del lavoro è dimostrare la fattibilità di integrare tecnologie moderne, come il linguaggio Rust e l’architettura RISC-V, all’interno di un processo di sviluppo ispirato alle pratiche richieste nei sistemi safety-critical come il software degli apparati di volo.
+
+I requisiti sono stati definiti e organizzati secondo la struttura prevista dal DO-178C, norma di specifica del software avionico, compresi requisiti di alto e basso livello e vincoli non funzionali.
+
+La fase di verifica combina modellazione formale e test dinamici. E' stato sviluppato e validato un modello per dimostrare le proprietà fondamentali di safety e liveness; successivamente, l’implementazione è stata sottoposta a test funzionali mirati e ad un’analisi di copertura strutturale, ottenendo risultati pienamente coerenti con gli obiettivi previsti.
+
+Il lavoro mostra come un utilizzo pragmatico delle pratiche DO-178C possa guidare efficacemente lo sviluppo di un kernel minimale basato su tecnologie emergenti, evidenziando al contempo le opportunità e le attuali limitazioni degli strumenti disponibili per Rust e RISC-V.
+
+\chapter*{Abstract}
+This thesis presents the development of a minimal real-time kernel written
+in Rust for RISC-V architectures in Machine Mode, designed according to the fundamental principles of the DO-178C avionics certification standard.
+
+The aim of the work is to demonstrate the feasibility of integrating modern technologies,
+such as the Rust language and the RISC-V architecture, into a development process inspired by the practices required in safety-critical systems such as flight equipment software.
+
+The requirements were defined and organised according to the structure provided by DO-178C, avionics software specification standards, including high-level and low-level requirements and non-functional constraints.
+
+The verification phase combines formal modelling and dynamic testing. A model was developed and validated to demonstrate the fundamental properties of safety and liveness; subsequently, the implementation was subjected to targeted functional tests and structural coverage analysis, obtaining results fully consistent with the expected objectives.
+
+The work shows how a pragmatic use of DO-178C practices can effectively guide the development of a minimal kernel based on emerging technologies, while highlighting the opportunities and current limitations of the tools available for Rust and RISC-V.
+
+
+\newpage
+\tableofcontents
+
+\mainmatter
+
+\addcontentsline{toc}{chapter}{Introduzione}
+\chapter*{Introduzione}
+\lettrine[lines=2, findent=3pt, nindent=0pt]{N}{}el campo dello sviluppo di sistemi embedded ad alta affidabilità, i sistemi operativi real-time (RTOS) rappresentano una componente fondamentale per garantire il rispetto di vincoli temporali stringenti e un comportamento deterministico.  
+Negli ultimi anni, l’adozione di architetture open source come RISC-V e di linguaggi moderni come Rust ha aperto nuove prospettive nello sviluppo di software per sistemi critici, unendo efficienza, sicurezza e maggiore verificabilità.  
+In ambito avionico, dove l’affidabilità è un requisito imprescindibile, tali sistemi devono essere realizzati seguendo standard rigorosi come il DO-178C, che definisce processi e criteri per la certificazione del software.
+
+\bigskip
+Questa tesi si concentra sulla progettazione e implementazione di un kernel minimale per RTOS in Rust, eseguito in Machine Mode (\textit{M-mode}) per architetture RISC-V.  
+Il kernel opera interamente in M-Mode, come richiesto per l’esecuzione di codice privilegiato in architettura RISC-V. In questa fase di sviluppo non è stato implementato alcun livello inferiore di privilegio (come User Mode), al fine di ridurre la complessità e concentrarsi sulle funzionalità di base del sistema. Quest’ultimo, pur essendo comune in molti sistemi operativi, richiederebbe meccanismi avanzati di gestione della memoria e di protezione tra processi, che sarebbero eccessivamente gravosi e lunghi da sviluppare compiutamente in questa sede.  
+Di conseguenza, il lavoro si focalizza su un kernel monolitico che gestisce direttamente il contesto di esecuzione, le interruzioni e le funzionalità di scheduling.
+
+\bigskip
+Un ulteriore elemento di interesse di questo progetto risiede nell’analisi dell’applicabilità dello standard DO-178C, concepito per linguaggi e architetture tradizionali (come C su processori ARM o PowerPC), a un contesto tecnologico più moderno e atipico, caratterizzato dall’uso combinato di RISC-V e Rust.  
+L’obiettivo non è riprodurre integralmente il complesso flusso di certificazione industriale previsto dalla normativa, ma piuttosto individuare e adottare un sottoinsieme di attività di sviluppo e verifica coerente con lo spirito dello standard, verificandone la fattibilità e le implicazioni pratiche.
+
+\newpage
+\section{Obiettivi della tesi}
+L’obiettivo generale di questo lavoro è lo sviluppo di un prototipo funzionante di kernel, applicando, in forma ridotta e adattata al contesto accademico, i principi e le pratiche previsti dallo standard DO-178C per lo sviluppo e la verifica del software avionico. Il progetto adotta il linguaggio Rust, scelto per le sue caratteristiche di memory-safety e per l’assenza di garbage collector, e si basa su un’architettura RISC-V open source e priva di costi di licenza o royalty
+
+In particolare, la tesi si propone di:
+\begin{itemize}
+    \item analizzare le caratteristiche dell’architettura RISC-V e del linguaggio Rust rilevanti per la realizzazione di sistemi real-time sicuri e deterministici;
+    \item definire requisiti di alto e basso livello per le componenti del kernel;
+    \item progettare e implementare le funzionalità essenziali del sistema, come la gestione degli interrupt, lo scheduling dei task e il supporto temporale;
+    \item sviluppare una strategia di verifica basata sui requisiti, includendo casi di test rappresentativi e raccolta di metriche di coverage;
+\end{itemize}
+
+L’intento non è ottenere una certificazione formale, ma dimostrare come i principi e le metodologie della DO-178C possano essere applicati a un progetto sperimentale che adotta tecnologie moderne, mantenendo tuttavia l’approccio strutturato e rigoroso tipico dei sistemi critici.
+.
+
+\addcontentsline{toc}{chapter}{Contesto e Tecnologie Utilizzate}
+\chapter*{Contesto e Tecnologie Utilizzate}
+\label{cap:1}
+
+Lo sviluppo di un RTOS con le tecnologie selezionate in precedenza e conforme ai requisiti di certificazione avionica DO-178C, richiede la comprensione approfondita di tre elementi fondamentali:
+\begin{itemize}
+    \item l’architettura hardware di riferimento;
+    \item il linguaggio di programmazione utilizzato;
+    \item lo standard normativo che ne guida lo sviluppo e la verifica.
+\end{itemize}  
+In questo capitolo vengono presentati i principi alla base dell’architettura \textit{RISC-V}, le caratteristiche di Rust rilevanti per lo sviluppo di sistemi embedded e real-time, e una panoramica dello standard DO-178C.
+
+\section{Architettura RISC-V}
+
+L'architettura \textit{RISC-V} è un'architettura di set di istruzioni (\textit{Instruction Set Architecture}, ISA) open source, basata sul paradigma \textit{Reduced Instruction Set Computer} (RISC).  
+È stata sviluppata presso l'Università della California, Berkeley, a partire dal 2010, inizialmente come progetto accademico volto a fornire una base di ricerca e didattica libera da vincoli proprietari.  
+Grazie alla sua apertura e flessibilità, RISC-V ha rapidamente suscitato l'interesse di aziende, enti governativi e centri di ricerca in tutto il mondo.
+
+A differenza di molte ISA proprietarie, il progetto RISC-V è distribuito sotto una licenza open e libera da royalty, permettendo a chiunque di implementarlo, modificarlo e produrlo senza restrizioni legali o costi di licenza. Questa caratteristica ha favorito la creazione di un ecosistema ampio, che spazia dalle applicazioni embedded a microcontrollori a basso consumo fino ai sistemi ad alte prestazioni.
+
+La filosofia progettuale di RISC-V si basa su alcuni principi chiave:
+\begin{itemize}
+    \item \textbf{Modularità}: il set di istruzioni di base (\texttt{RV32I}, \texttt{RV64I} e \texttt{RV128I}) può essere esteso con moduli opzionali, come le estensioni per la moltiplicazione/divisione intera (\texttt{M}), operazioni in virgola mobile (\texttt{F}, \texttt{D}), istruzioni atomiche (\texttt{A}), compressione del codice (\texttt{C}) e altre.
+    \item \textbf{Semplicità}: il core ISA è ridotto e facile da implementare, favorendo la portabilità e l’adozione anche su hardware con risorse limitate.
+    \item \textbf{Scalabilità}: il design è adatto sia a microcontrollori con poche migliaia di porte logiche, sia a processori multi-core ad alte prestazioni.
+\end{itemize}
+
+L’architettura supporta diversi livelli di privilegio (\textit{privilege modes}) definite nello \textit{RISC-V Privileged Specification}:
+\begin{itemize}
+    \item \textbf{Machine Mode (M)}: il livello più alto di privilegio, con accesso diretto a tutte le risorse dell’hardware. È obbligatorio e rappresenta il punto di avvio del processore.
+    \item \textbf{Supervisor Mode (S)}: utilizzato tipicamente da sistemi operativi per la gestione della memoria virtuale e dei dispositivi.
+    \item \textbf{User Mode (U)}: il livello meno privilegiato, dedicato all’esecuzione delle applicazioni utente.
+\end{itemize}
+
+Grazie a queste caratteristiche, RISC-V si presta perfettamente allo sviluppo di sistemi su misura, in cui l’ISA può essere ridotta all’essenziale per minimizzare area e consumi, oppure arricchita di estensioni per incrementare le prestazioni.
+Questa flessibilità rende l’architettura particolarmente adatta all’impiego in sistemi critici ed embedded, dove è necessario ottimizzare il rapporto tra prestazioni, consumo energetico e costi di produzione.
+
+\section{Linguaggio Rust}
+
+Rust è un linguaggio di programmazione moderno, sviluppato da Mozilla Research e rilasciato per la prima volta nel 2010, concepito con l’obiettivo di combinare prestazioni paragonabili al C/C++ con un forte modello di sicurezza della memoria e della concorrenza. Grazie alla sua architettura di compilazione e al suo sistema di tipizzazione, Rust risulta particolarmente adatto per lo sviluppo di sistemi a basso livello e, con opportune metodologie, anche per applicazioni in tempo reale.
+
+\subsection{Sicurezza della memoria e assenza di garbage collector}
+Una delle principali caratteristiche di Rust è il meccanismo di \emph{ownership} e \emph{borrowing}, che garantisce sicurezza della memoria a tempo di compilazione, prevenendo errori comuni come \emph{dangling pointer}, \emph{null pointer dereference} o \emph{data race}.  
+L’assenza di un \emph{garbage collector} elimina fonti di latenza non deterministica, caratteristica essenziale per sistemi real-time.
+
+\subsection{Controllo a basso livello}
+Rust permette un controllo diretto dell’hardware grazie alla possibilità di:
+\begin{itemize}
+    \item utilizzare puntatori grezzi (\emph{raw pointers}) in contesti \texttt{unsafe};
+    \item accedere a registri di memoria mappati;
+    \item definire strutture con layout di memoria deterministico (\texttt{\#[repr(C)]}).
+\end{itemize}
+Queste funzionalità permettono di realizzare driver, firmware e sistemi operativi con granularità simile al C, mantenendo al contempo garanzie di sicurezza a tempo di compilazione.
+
+\subsection{Supporto alla concorrenza e determinismo}
+Il modello di concorrenza di Rust, basato sull’analisi statica delle dipendenze tra thread, previene race conditions senza costi a runtime. In ambito real-time ciò favorisce la prevedibilità, pur richiedendo attenzione nella progettazione delle primitive di scheduling.
+
+\subsection{Compatibilità con sistemi embedded e bare-metal}
+Rust supporta lo sviluppo \emph{bare-metal} tramite il \emph{crate} \texttt{core}, privo di dipendenze da un sistema operativo. La possibilità di compilare per architetture come RISC-V e di definire un \emph{runtime} personalizzato rende Rust idoneo alla realizzazione di un RTOS in modalità macchina.
+
+\subsection{Considerazioni per la certificazione DO-178C}
+In un contesto industriale, l’impiego di Rust in applicazioni critiche richiederebbe l’adozione di pratiche specifiche, tra cui:
+\begin{itemize}
+    \item la definizione di un sottoinsieme del linguaggio formalmente verificato;
+    \item la tracciabilità completa tra requisiti, codice e test;
+    \item la qualificazione del compilatore e dei \emph{crate} utilizzati;
+    \item la produzione di evidenze di analisi statica e verifica formale.
+\end{itemize}
+Nel contesto di questa tesi tali attività non sono state realizzate integralmente, ma vengono menzionate per evidenziare gli aspetti che un processo conforme al DO-178C dovrebbe considerare.
+Le proprietà intrinseche di Rust, come la sicurezza della memoria e la prevedibilità del comportamento a tempo di compilazione, possono comunque agevolare l’adozione di un approccio conforme allo standard.
+
+\section{Standard DO-178(C)}
+
+Il DO-178C, formalmente intitolato \emph{Software Considerations in Airborne Systems and Equipment Certification}, rappresenta lo standard di riferimento per lo sviluppo, la verifica e la certificazione del software avionico.  
+Pubblicato nel 2011 da RTCA (Radio Technical Commission for Aeronautics) ed EUROCAE (European Organisation for Civil Aviation Equipment), il documento costituisce l’evoluzione del precedente DO-178B del 1992, introducendo chiarimenti, aggiornamenti metodologici e supplementi tecnici per affrontare le sfide delle nuove tecnologie software.
+
+\subsection{Evoluzione dello standard}
+Il primo documento della serie, il DO-178A, fu pubblicato nel 1985 con l’obiettivo di stabilire linee guida per lo sviluppo del software impiegato in sistemi aeronautici. Tuttavia, la rapida evoluzione tecnologica e la crescente complessità dei sistemi avionici resero necessaria una revisione, portando alla pubblicazione del DO-178B nel 1992, che divenne il riferimento principale per oltre due decenni.  
+Con l’avvento di nuovi paradigmi di sviluppo, come la modellazione, la programmazione orientata agli oggetti e le tecniche di verifica formale, si è reso necessario un ulteriore aggiornamento. Il risultato è il DO-178C, che mantiene la struttura e la filosofia del DO-178B ma integra appendici e documenti supplementari (DO-331 per il Model-Based Development, DO-332 per l’Object-Oriented Technology, DO-333 per le Formal Methods e DO-330 per la qualificazione degli strumenti software).
+
+\subsection{Obiettivi e ambito di applicazione}
+Lo standard fornisce un quadro metodologico volto a garantire la sicurezza, l’affidabilità e la tracciabilità del software aeronautico, assicurando che ogni fase, dalla definizione dei requisiti fino all’integrazione finale, soddisfi livelli di integrità proporzionati alla criticità della funzione svolta.  
+La conformità al DO-178C è generalmente richiesta dalle autorità di certificazione come la \emph{Federal Aviation Administration} (FAA) e l’\emph{European Union Aviation Safety Agency} (EASA) per tutti i sistemi avionici impiegati in ambito civile.
+
+
+\subsection{Livelli di integrità del software}
+
+Il DO-178C classifica il software avionico in cinque livelli di integrità, denominati \emph{Design Assurance Levels} (DAL), che determinano la severità delle attività di sviluppo e verifica richieste.  
+Il livello di integrità è stabilito in base alla gravità delle conseguenze che un malfunzionamento del software potrebbe avere sulla sicurezza del volo.
+
+\begin{itemize}
+    \item \textbf{Livello A – Catastrophic}: un guasto del software può portare a conseguenze catastrofiche, come la perdita dell’aeromobile o di vite umane.  
+    Esempi includono i sistemi di controllo primario di volo (\emph{Flight Control Computers}) o i sistemi di gestione della spinta (\emph{Engine Control Units}), dove un errore può compromettere la stabilità e la controllabilità del velivolo.
+    
+    \item \textbf{Livello B – Hazardous/Severe-Major}: un malfunzionamento può causare un degrado significativo della sicurezza o aumentare notevolmente il carico di lavoro dell’equipaggio, mettendo a rischio la missione.  
+    Esempi tipici sono i sistemi di gestione dell’autopilota, i sistemi di navigazione o di controllo secondario (ad esempio, controllo del timone o degli spoiler).
+    
+    \item \textbf{Livello C – Major}: un errore può causare un impatto rilevante sulle prestazioni o sul comfort, ma non compromette direttamente la sicurezza del volo.  
+    Rientrano in questo livello, ad esempio, i sistemi di monitoraggio ambientale o i moduli di gestione della cabina di pilotaggio (\emph{Cockpit Display Systems}).
+    
+    \item \textbf{Livello D – Minor}: un guasto comporta effetti minori, come una riduzione di efficienza o funzioni non essenziali non disponibili.  
+    Possono appartenere a questo livello i sistemi di registrazione dati (\emph{Data Logging}) o alcune funzioni ausiliarie di bordo.
+    
+    \item \textbf{Livello E – No Effect}: un guasto non ha alcun impatto sulla sicurezza o sulle operazioni dell’aeromobile.  
+    Esempi possono includere componenti puramente informativi o di servizio, come moduli di gestione non critici o sistemi di intrattenimento a bordo.
+\end{itemize}
+
+In sintesi, il livello DAL stabilisce la quantità e la profondità delle attività di verifica e validazione da applicare durante lo sviluppo: dal livello A, che richiede la massima copertura di test e tracciabilità, al livello E, per il quale non è richiesta alcuna verifica ai fini della certificazione.
+
+\newpage
+\subsection{Processi fondamentali}
+
+Il DO-178C struttura l’intero ciclo di vita del software avionico attorno a tre processi principali: \emph{sviluppo}, \emph{verifica} e \emph{supporto}.  
+Ciascuno di essi contribuisce, con obiettivi distinti ma complementari, a garantire che il prodotto software soddisfi i requisiti di sicurezza e qualità richiesti per la certificazione.
+
+\begin{enumerate}
+    \item \textbf{Processo di sviluppo}  
+    Comprende tutte le attività necessarie per trasformare i requisiti di sistema in un software certificabile.  
+    Si articola in più fasi:
+    \begin{itemize}
+        \item \emph{Requisiti software}: definizione e analisi dei requisiti funzionali e non funzionali, con particolare attenzione alla tracciabilità rispetto ai requisiti di sistema. Ad esempio, la specifica del comportamento di un modulo di controllo del volo o la gestione di un allarme di bordo.
+        \item \emph{Progettazione}: suddivisione del software in architetture e componenti, definendo interfacce, flussi di dati e vincoli temporali. Un esempio è la definizione dell’architettura a task per un sistema real-time avionico.
+        \item \emph{Implementazione}: codifica dei moduli software conformemente agli standard di codifica e alle regole di sicurezza (es. MISRA o subset del linguaggio). In questa fase vengono applicate pratiche di programmazione sicura per evitare errori di runtime.
+        \item \emph{Integrazione}: combinazione e test progressivi dei moduli sviluppati, fino alla formazione del sistema completo, verificando la corretta interazione tra componenti (ad esempio, tra un modulo di controllo motore e il sistema di acquisizione sensori).
+    \end{itemize}
+    L’obiettivo è ottenere un software coerente con i requisiti di sicurezza e conforme alla pianificazione definita nel \emph{Plan for Software Aspects of Certification} (PSAC).
+
+    \item \textbf{Processo di verifica}  
+    Garantisce che ogni artefatto prodotto durante lo sviluppo soddisfi i criteri di correttezza, coerenza e completezza.  
+    Include attività di revisione, analisi statica e test dinamici, assicurando la tracciabilità bidirezionale tra requisiti, codice e risultati di test.  
+    Ad esempio, la verifica di un requisito di stabilità può avvenire tramite analisi dei margini di controllo e successivi test di integrazione.  
+    I livelli DAL determinano la profondità delle verifiche: per un software di livello A si richiede, ad esempio, la copertura di decisioni e condizioni (\emph{MC/DC coverage}).
+
+    \item \textbf{Processi di supporto}  
+    Comprendono tutte le attività trasversali che garantiscono l’integrità e la ripetibilità del processo di sviluppo.  
+    Tra queste:
+    \begin{itemize}
+        \item \emph{Gestione della configurazione}: controllo delle versioni di codice, documenti e dati di test, assicurando che ogni elemento sia identificabile e riproducibile.
+        \item \emph{Assicurazione della qualità}: verifica indipendente che i processi e i prodotti rispettino le procedure stabilite nei piani di qualità e certificazione.
+        \item \emph{Documentazione e tracciabilità}: produzione e mantenimento dei deliverable obbligatori (piani, standard, report di test, manuali), come richiesto per la revisione da parte delle autorità di certificazione.
+    \end{itemize}
+    Questi processi non producono direttamente codice, ma sono essenziali per garantire la conformità del ciclo di vita software e la validità delle evidenze di certificazione.
+\end{enumerate}
+
+\subsection{Verifica, tracciabilità e documentazione}
+
+Il DO-178C stabilisce che ogni requisito software debba essere tracciato bidirezionalmente verso gli elementi di progettazione, il codice sorgente e i test di verifica.  
+Questo principio di tracciabilità consente di garantire che ogni funzionalità sia giustificata da un requisito e che nessuna porzione di codice rimanga priva di una motivazione progettuale.
+
+Le attività di verifica mirano a dimostrare la conformità del software ai requisiti e si articolano in analisi statica, revisione dei prodotti di sviluppo e test dinamici.  
+Il livello di copertura richiesto varia in funzione del \emph{Design Assurance Level} (DAL):
+\begin{itemize}
+    \item \textbf{DAL A/B}: copertura delle decisioni e delle condizioni (\emph{Modified Condition/Decision Coverage}, MC/DC);
+    \item \textbf{DAL C}: copertura delle decisioni;
+    \item \textbf{DAL D}: copertura delle istruzioni.
+\end{itemize}
+Tali metriche garantiscono che tutte le porzioni di codice eseguibile siano effettivamente verificate e che le condizioni logiche siano valutate in tutte le combinazioni significative.
+
+La verifica deve essere accompagnata da una documentazione completa, che rappresenta una parte integrante del processo di certificazione.  
+Tra i documenti principali richiesti figurano:
+\begin{itemize}
+    \item \textbf{PSAC} - \emph{Plan for Software Aspects of Certification}, che definisce la pianificazione delle attività di sviluppo e verifica;
+    \item \textbf{SRD} - \emph{Software Requirements Document}, che raccoglie i requisiti del software;
+    \item \textbf{SDD} - \emph{Software Design Description}, che descrive l’architettura e i componenti software;
+    \item \textbf{SVCP} - \emph{Software Verification Cases and Procedures}, che definisce i casi di test;
+    \item \textbf{SCI} - \emph{Software Configuration Index}, che elenca tutti i componenti software e le loro versioni;
+    \item \textbf{SAS} - \emph{Software Accomplishment Summary}, che riassume le evidenze di conformità.
+\end{itemize}
+
+Questi documenti costituiscono le evidenze formali richieste dalle autorità di certificazione per dimostrare la corretta applicazione dei processi previsti dal DO-178C.
+
+\addcontentsline{toc}{chapter}{Definizione e Specifica dei Requisiti}
+\chapter*{Definizione e Specifica dei Requisiti}
+\label{cap:2}
+
+Lo sviluppo di un RTOS conforme ai principi del DO-178C inizia con la definizione rigorosa dei requisiti, elemento fondamentale per garantire tracciabilità, verificabilità e coerenza dell’intero ciclo di vita software.  
+In accordo con lo standard, tali requisiti sono documentati nel \emph{Software Requirements Data} (SRD), che rappresenta la base formale su cui si fondano le successive attività di progettazione, implementazione e verifica.
+
+In questo capitolo viene illustrata la metodologia adottata per la definizione e l’organizzazione dei requisiti del kernel sviluppato.  
+Dopo una breve introduzione ai principi di classificazione e tracciabilità previsti dal DO-178C, vengono presentati i requisiti specifici del sistema, suddivisi in tre categorie principali:
+ 
+
+\begin{itemize}
+    \item \textbf{Requisiti di alto livello (High-Level Requirements, HLR)}: definiscono le funzionalità e i comportamenti attesi dal sistema in termini generali e osservabili.
+    \item \textbf{Requisiti di basso livello (Low-Level Requirements, LLR)}: derivano dagli HLR e descrivono le condizioni di implementazione, fornendo la base diretta per la progettazione e la scrittura del codice.
+    \item \textbf{Requisiti non funzionali (Non-Functional Requirements, NFR)}: stabiliscono vincoli e proprietà trasversali del sistema, come l’uso statico della memoria, il determinismo temporale, l’assenza di allocazioni dinamiche e la gestione degli errori. Pur non essendo funzionalità osservabili, gli NFR fissano i limiti entro cui il sistema deve operare per garantire prevedibilità e verificabilità.
+\end{itemize}
+
+Questa classificazione fornisce la struttura di riferimento per la redazione dei requisiti, che devono essere espressi secondo criteri di chiarezza, verificabilità e tracciabilità definiti dal DO-178C.
+Nel paragrafo successivo viene descritto il formato e le regole di scrittura dei requisiti all’interno dello \emph{Software Requirements Data} (SRD). 
+
+\section{Il \emph{Software Requirements Data} secondo il DO-178C}
+
+Il DO-178C stabilisce che i requisiti software siano formalizzati all’interno del documento \emph{Software Requirements Data} (SRD), che rappresenta il riferimento principale per tutte le fasi di progettazione, implementazione e verifica.  
+Tale documento deve soddisfare alcune caratteristiche fondamentali:
+
+\begin{itemize}
+    \item \textbf{Chiarezza e univocità}: ogni requisito deve essere espresso in modo comprensibile e privo di ambiguità, evitando formulazioni che possano dar luogo a interpretazioni diverse.  
+
+    \begin{quote}
+        \textbf{\textit{Esempio non conforme}}: “Il sistema deve rispondere rapidamente agli interrupt.”  
+
+        \textbf{\textit{Esempio corretto}}: “Il sistema deve gestire un interrupt entro 10~µs dal suo rilevamento.”
+    \end{quote}
+
+    Nel primo caso il termine “rapidamente” è soggettivo; nel secondo, il requisito è chiaro, misurabile e non interpretabile.
+
+    \vspace{0.5em}
+
+    \item \textbf{Verificabilità}: ciascun requisito deve poter essere dimostrato tramite analisi, ispezione o test, così da garantire la possibilità di una verifica oggettiva.  
+
+    \begin{quote}
+        \textbf{\textit{Esempio non conforme}}: “Il kernel deve essere semplice da usare.”  
+
+        \textbf{\textit{Esempio corretto}}: “Il kernel deve fornire un’API con un massimo di 5 funzioni pubbliche per la gestione dei task.”
+    \end{quote}
+
+    Il primo requisito non è verificabile, mentre il secondo può essere controllato oggettivamente tramite ispezione del codice o analisi dell’interfaccia.
+
+    \vspace{0.5em}
+
+    \item \textbf{Tracciabilità}: deve essere sempre possibile stabilire un legame bidirezionale tra ogni requisito, la sua implementazione e le relative attività di verifica.  
+
+    \begin{quote}
+        \textbf{\textit{Esempio non conforme}}: “Implementare la funzione di scheduling dei task.”  
+
+        \textbf{\textit{Esempio corretto}}: “Il sistema deve supportare uno scheduler a priorità fissa (HLR-05), implementato nel modulo \texttt{task.rs} e verificato dal test \texttt{test\_scheduler\_priority()}.”
+    \end{quote}
+
+    Nel secondo caso, il requisito è tracciabile sia verso il codice che verso il test, come richiesto dal DO-178C.
+\end{itemize}
+
+
+
+In particolare, lo standard enfatizza il principio di \emph{bidirectional traceability}, ovvero la capacità di risalire:
+\begin{itemize}
+    \item dai requisiti di sistema verso il codice e i casi di test che li implementano e li verificano;
+    \item dal codice e dai test verso i requisiti che ne giustificano l’esistenza.
+\end{itemize}
+
+Nel contesto di questa tesi, lo SRD è stato redatto in forma semplificata, ma conserva la stessa struttura logica prevista dal DO-178C.  
+Esso distingue tra \emph{High-Level Requirements} (HLR), \emph{Low-Level Requirements} (LLR) e \emph{Non-Functional Requirements} (NFR), includendo inoltre una matrice di tracciabilità che mette in relazione ciascun requisito con i moduli implementati e le attività di verifica.  
+
+Il presente capitolo si concentra sulla definizione e descrizione dei requisiti funzionali (HLR e LLR) e, per completezza, riporta anche i principali requisiti non funzionali, che fissano vincoli trasversali sul comportamento del kernel, come l’uso statico della memoria, il determinismo temporale e la gestione sicura degli errori.
+
+\section{Requisiti del Sistema}
+
+Questa sezione descrive i requisiti del kernel, classificati secondo la metodologia prevista dal DO-178C in:
+\begin{itemize}
+    \item \textbf{Requisiti di alto livello (High-Level Requirements, HLR)};
+    \item \textbf{Requisiti di basso livello (Low-Level Requirements, LLR)};
+    \item \textbf{Requisiti non funzionali (Non-Functional Requirements, NFR)}.
+\end{itemize}
+
+Ogni categoria viene trattata nelle sottosezioni seguenti, includendo una descrizione dei requisiti e, ove necessario, esempi o note implementative.
+
+\subsection{Requisiti di Alto Livello (HLR)}
+I requisiti di alto livello definiscono le funzionalità principali che il kernel deve fornire per garantire il comportamento atteso del sistema.  
+Essi descrivono cosa il sistema deve fare dal punto di vista funzionale, senza entrare nei dettagli implementativi che saranno specificati nei requisiti di basso livello.
+
+\subsubsection*{HLR-1: Clock e Tick di sistema}
+Il kernel mantiene un contatore di sistema che avanza in modo monotono, incrementandosi di una unità ogni 1\,ms. L'incremento è pilotato dagli interrupt del Machine Timer, ottenuti programmando il confronto del timer in base alla sorgente hardware (es.\ su QEMU \texttt{virt}: MTIME $\approx 10$\,MHz $\Rightarrow$ riarmo di $+10{.}000$ cicli per tick). Il contatore costituisce la base temporale per servizi come \texttt{delay\_ms()}.
+
+\subsubsection*{HLR-2: Scheduler dei task}
+Il kernel gestisce fino a 4 task concorrenti, eseguendone uno solo alla volta. La selezione tra task \emph{Ready} avviene in modo cooperativo (il task in esecuzione cede volontariamente la CPU) e, a parità di priorità, segue una politica semplice (es.\ round-robin tra i \emph{Ready}).
+
+\subsubsection*{HLR-3: API di gestione dei task}
+Il kernel espone API per creare un task, cedere volontariamente la CPU e avviare il primo task: \texttt{create\_task(entry, prio)}, \texttt{task\_yield()}, \texttt{start\_first\_task()}. Le API rispettano i limiti statici (\texttt{MAX\_TASKS}, stack per task) e non richiedono allocazione dinamica.
+
+\subsubsection*{HLR-4: Servizio di ritardo temporizzato}
+Il kernel fornisce \texttt{delay\_ms(ms)} che blocca il task chiamante fino a quando il contatore di tick non ha raggiunto la scadenza (\(t_0 + ms\), con risoluzione 1\,ms). Il servizio è bloccante per il task chiamante e non effettua busy-wait.
+
+\subsubsection*{HLR-5: Primitive di sincronizzazione (Semafori)}
+Il kernel fornisce un semaforo contatore con operazioni \texttt{post}, \texttt{wait} (bloccante) e \texttt{try\_wait} (non bloccante). \texttt{wait} sospende il task se il contatore è zero; \texttt{post} incrementa il contatore e sblocca eventualmente un task in attesa.
+
+\subsection*{HLR-6: Primitive di sincronizzazione (Spinlock)}
+Il kernel fornisce uno \emph{spinlock} per proteggere sezioni critiche \emph{brevi} in contesto di task. L’uso prolungato è scoraggiato; non richiede disabilitazione degli interrupt.
+
+\subsubsection*{HLR-7: Console di output (UART)}
+Il kernel espone funzioni di output su UART in \emph{polling} per la stampa di stringhe e valori numerici (decimale/esadecimale), utilizzando i registri MMIO documentati.
+
+\subsubsection*{HLR-8: Gestione delle eccezioni e del \textit{panic}}
+Il kernel distingue interrupt (timer) da eccezioni (es.\ istruzione illegale, fault di memoria, ECALL) ed in caso di condizioni non recuperabili esegue il percorso di \emph{panic}: disabilita gli interrupt, emette una diagnostica minima (causa, PC) e ferma il sistema. Gli interrupt esterni non sono gestiti e sono fuori dallo scopo.
+
+\subsubsection*{HLR-9: Avvio deterministico del sistema}
+All’avvio, il kernel inizializza in ordine definito: base temporale (timer), strutture dei task e primo task, quindi trasferisce il controllo a quest’ultimo tramite routine dedicate. Lo stato iniziale è noto e pulito.
+
+\subsubsection*{HLR-10: Interfacce architetturali in Assembly}
+Il kernel espone le interfacce a basso livello \texttt{trap\_entry} e \texttt{\_\_rtos\_boot\_with\_sp} implementate in assembly. Tali interfacce rispettano il contratto di chiamata e il layout del frame (\texttt{OFF\_*}) utilizzato dal codice Rust.
+
+\subsection{Requisiti di Basso Livello (LLR)}
+I requisiti di basso livello dettagliano la realizzazione tecnica degli HLR, traducendoli in comportamenti del codice, strutture dati e interfacce specifiche.  
+Essi rappresentano il collegamento diretto tra la progettazione logica del sistema e la sua implementazione concreta.
+
+\subsubsection*{LLR-1: Frequenza Tick}
+Il kernel deve riarmare il registro \texttt{MTIMECMP} con un incremento costante di +10.000 cicli (sulla macchina virtuale QEMU \texttt{virt}, con frequenza di 10\,MHz), così da generare un tick di 1\,ms.  
+
+\subsubsection*{LLR-2: Contatore Tick}
+La funzione \texttt{ticks()} deve restituire il valore corrente del contatore a 64 bit che tiene traccia del numero totale di tick generati dal sistema. 
+
+\subsubsection*{LLR-3: Conversione Delay}
+La funzione \texttt{delay\_ms(ms)} deve bloccare il task chiamante finché il contatore \texttt{ticks()} non raggiunge \(t_0 + ms\).  
+
+\subsubsection*{LLR-4: Limiti Task}
+Il numero massimo di task supportati è fissato a 4 (\texttt{MAX\_TASKS}) e lo stack per ciascun task è di 4096\,B (\texttt{TASK\_STACK\_BYTES}).  
+
+\subsubsection*{LLR-5: Contenuto del TCB}
+Ogni Task Control Block deve contenere: SP (puntatore stack), puntatore all’entry function, stato corrente, priorità e limiti dello stack.  
+
+\subsubsection*{LLR-6: Avvio del Primo Task}
+La funzione \texttt{start\_first\_task()} deve selezionare il primo task in stato \emph{Ready}, aggiornarne lo stato a \emph{Running} e trasferire il controllo a esso tramite \texttt{\_\_rtos\_boot\_with\_sp}.  
+
+\subsubsection*{LLR-7: Yield}
+La funzione \texttt{task\_yield()} deve permettere al task in esecuzione di cedere volontariamente la CPU, passando il controllo al successivo task \emph{Ready} di pari priorità.  
+
+\subsubsection*{LLR-8: Correttezza del Semaforo}
+Le operazioni devono rispettare la semantica: \texttt{wait()} blocca se il contatore è zero; \texttt{post()} incrementa il contatore e può sbloccare un task; \texttt{try\_wait()} decrementa solo se il contatore è positivo.  
+
+\subsubsection*{LLR-9: SpinLock}
+La funzione \texttt{lock()} deve acquisire lo spinlock con attesa attiva, e il rilascio deve avvenire automaticamente tramite \texttt{drop}.  
+
+\subsubsection*{LLR-10: Trasmissione UART}
+Le funzioni \texttt{puts}, \texttt{put\_hex}, \texttt{put\_dec} devono scrivere i dati sulla UART in modalità polling, verificando la disponibilità del trasmettitore tramite il registro di stato.  
+
+\subsubsection*{LLR-11: Decodifica Trap}
+La funzione \texttt{trap\_handler} deve leggere i registri \texttt{mcause} e \texttt{mepc} dal frame e distinguere tra interrupt del timer ed eccezioni.  
+
+\subsubsection*{LLR-12: ISR Timer}
+La routine \texttt{timer\_interrupt()} deve chiamare \texttt{rtos\_on\_timer\_tick()} per aggiornare il contatore e riarmare \texttt{MTIMECMP} di +10.000.  
+
+\subsubsection*{LLR-13: Azioni in Panic}
+In caso di \emph{panic}, il sistema deve disabilitare gli interrupt, stampare informazioni diagnostiche (causa e PC) e fermarsi in un ciclo infinito.  
+
+\subsubsection*{LLR-14: Layout del Frame}
+Il layout del frame definito in Rust (\texttt{OFF\_*}) deve corrispondere esattamente al salvataggio e ripristino implementato in assembly (\texttt{trap.S}).  
+
+\subsection{Requisiti Non Funzionali (NFR)}
+I requisiti non funzionali definiscono i vincoli trasversali che regolano le proprietà qualitative del kernel, come il determinismo temporale, l’uso della memoria e il comportamento in caso di errore.  
+Pur non introducendo nuove funzionalità, questi requisiti fissano i limiti operativi necessari a garantire sicurezza, prevedibilità e verificabilità del sistema.
+
+\subsubsection*{NFR-1: Determinismo temporale}
+Tutti i servizi del kernel devono essere deterministici: le primitive di base come \texttt{yield}, \texttt{delay}, \texttt{Semaphore} e \texttt{SpinLock} devono avere complessità costante O(1).  
+Questo vincolo assicura che il tempo di esecuzione di tali operazioni non dipenda dal numero di task o dallo stato interno, garantendo prevedibilità e assenza di jitter non controllato.
+
+\subsubsection*{NFR-2: Allocazione della memoria}
+Il kernel non deve utilizzare allocazione dinamica. Tutte le strutture principali (Task Control Block e stack dei task) devono essere allocate staticamente a tempo di compilazione o tramite linker script.  
+In questo modo si elimina il rischio di frammentazione e si facilita la verifica del consumo di memoria, in linea con i principi di sicurezza e semplicità richiesti.
+
+\subsubsection*{NFR-3: Footprint di memoria}
+Lo spazio totale riservato agli stack dei task deve essere pari a 16\,KiB (4 task $\times$ 4096\,B ciascuno), allocato nella sezione dedicata \texttt{.tasks}.  
+La definizione statica dello spazio garantisce prevedibilità nell’uso della RAM e permette di verificare facilmente che il sistema rispetti i vincoli imposti dall’ambiente target.
+
+\subsubsection*{NFR-4: Sicurezza in caso di errore}
+In presenza di eccezioni non previste o condizioni di errore gravi, il kernel deve entrare in modalità di \emph{panic}, disabilitare gli interrupt, emettere una diagnostica minima e fermarsi in modo sicuro.  
+Questa scelta garantisce un comportamento deterministico e riduce il rischio che il sistema prosegua in uno stato inconsistente o pericoloso.
+
+\section{Vincoli e Assunzioni}
+
+Lo sviluppo del kernel è stato guidato da vincoli progettuali precisi, finalizzati a ridurre la complessità e a favorire la verificabilità del sistema secondo i principi del DO-178C.  
+L’architettura di riferimento è \textbf{RISC-V 64 bit}, scelta per la sua semplicità e trasparenza a basso livello, che consente un controllo diretto dell’hardware e una gestione prevedibile delle eccezioni.
+
+Per l’ambiente di test è stato impiegato il simulatore \textbf{QEMU} (\texttt{virt}), scelto per la capacità di emulare in modo accurato le periferiche essenziali, in particolare il timer CLINT e la UART0, senza richiedere hardware fisico dedicato.
+
+Il kernel adotta un modello \textbf{monolitico}, privo di spazio utente: tutte le funzioni vengono eseguite in contesto privilegiato e la gestione della memoria si limita agli stack dei task e alle sezioni statiche (\texttt{.text}, \texttt{.data}, \texttt{.bss}).  
+Gli unici interrupt gestiti sono quelli del \textbf{Machine Timer}; gli interrupt esterni e software sono esclusi dallo scopo del progetto.
+
+Questi vincoli, pur limitando le funzionalità rispetto a un sistema operativo completo, consentono di mantenere il progetto compatto, prevedibile e facilmente verificabile, in linea con gli obiettivi di un prototipo conforme ai principi del DO-178C.
+
+\addcontentsline{toc}{chapter}{Progettazione e Implementazione}
+\chapter*{Progettazione e Implementazione}
+\label{cap:3}
+
+Questo capitolo descrive il processo di progettazione e realizzazione del kernel.  
+L’obiettivo è illustrare le scelte tecniche e strutturali adottate per garantire semplicità, prevedibilità e verificabilità, in linea con i principi del DO-178C.  
+
+La trattazione è organizzata in modo progressivo: si parte dalla definizione dell’ambiente di sviluppo, si analizza l’architettura generale del sistema e la suddivisione in moduli software, per poi approfondire l’implementazione delle principali funzionalità del kernel.
+
+\section{Ambiente di Sviluppo}
+
+La realizzazione di un un qualsiasi software ispirato ai principi della DO-178C richiede un ambiente di sviluppo stabile, riproducibile e strettamente controllato.  
+Tale ambiente deve non solo consentire l’implementazione del software, ma anche supportare la verifica e l’analisi del comportamento del sistema nelle diverse fasi del ciclo di vita.
+
+Le principali caratteristiche richieste sono:
+\begin{itemize}
+    \item \textbf{Riproducibilità delle condizioni di esecuzione}, per garantire la consistenza dei risultati tra diverse sessioni di test;
+    \item \textbf{Strumenti di debug e introspezione}, indispensabili per l’analisi dei comportamenti anomali e la validazione delle ipotesi di progetto;
+    \item \textbf{Monitoraggio delle prestazioni e della latenza}, necessario per valutare il rispetto dei vincoli temporali del kernel;
+    \item \textbf{Raccolta strutturata dei dati di esecuzione}, utile per documentare le prove e supportare la tracciabilità delle attività di verifica.
+\end{itemize}
+
+In questa sezione vengono descritti gli strumenti, le piattaforme e le configurazioni adottate per realizzare un ambiente di sviluppo coerente con gli obiettivi del progetto e adeguato a un contesto di sviluppo a requisiti tracciabili.
+
+\subsection{Piattaforma di Riferimento}
+
+La piattaforma di riferimento adottata è basata su architettura \textbf{RISC-V a 64 bit} con set di istruzioni \texttt{RV64IMAC}, che include operazioni intere, moltiplicazione e divisione, istruzioni atomiche e formato compresso.  
+L’esecuzione del kernel avviene in ambiente simulato tramite \textbf{QEMU} (\texttt{qemu-system-riscv64}, macchina \texttt{virt}), configurato per emulare una CPU compatibile con tale ISA e le periferiche essenziali, come il timer CLINT e la UART0.
+
+L’uso della simulazione consente di operare in un contesto completamente osservabile e riproducibile, caratteristiche fondamentali per uno sviluppo conforme ai principi del DO-178C.  
+I principali vantaggi di questo approccio sono:
+\begin{itemize}
+    \item \textbf{Riproducibilità}: i test possono essere ripetuti in condizioni identiche, garantendo coerenza e tracciabilità dei risultati;
+    \item \textbf{Osservabilità}: lo stato interno della CPU e delle periferiche emulate è accessibile in ogni istante, consentendo un’analisi dettagliata del comportamento del sistema;
+    \item \textbf{Debug e profilazione}: la simulazione permette un controllo fine del flusso di esecuzione e la raccolta di informazioni utili alla verifica e all’ottimizzazione.
+\end{itemize}
+
+\subsection{Simulatore e Configurazione del Sistema}
+
+Per l’esecuzione del kernel è stato utilizzato il simulatore \textbf{QEMU}, configurato per emulare la macchina virtuale \texttt{virt} a 64 bit dell’architettura RISC-V.  
+Questa configurazione offre un ambiente di sviluppo riproducibile e completamente osservabile, con controllo diretto sul layout di memoria, le periferiche emulate e le modalità di avvio.
+
+\subsubsection*{Linker Script: \texttt{link.ld}}
+
+Il file \texttt{link.ld} rappresenta lo \emph{linking script} utilizzato dal linker per generare il binario finale.  
+In un sistema bare-metal, il linker script riveste un ruolo fondamentale: stabilisce dove verranno collocate in memoria le diverse sezioni del programma (\texttt{.text}, \texttt{.rodata}, \texttt{.data}, \texttt{.bss}, stack, heap) e definisce il punto esatto da cui inizia l’esecuzione.
+
+Nel caso di questo progetto, lo script è minimale e delega la maggior parte della configurazione al file \texttt{link.x}, fornito automaticamente dal crate \texttt{riscv-rt}, il \emph{runtime} di Rust per RISC-V:
+
+\begin{center}
+\begin{verbatim}
+ENTRY(_start)
+INCLUDE link.x
+\end{verbatim}
+\end{center}
+
+La direttiva \texttt{ENTRY(\_start)} definisce l'entry del programma, cioè l’indirizzo in cui il processore inizierà l’esecuzione dopo il reset.  
+A tale indirizzo viene posizionato il codice di \emph{bootstrap}, scritto in assembly, che si occupa di:
+\begin{itemize}
+    \item inizializzare lo stack;
+    \item azzerare la sezione \texttt{.bss} e copiare i dati inizializzati nella sezione \texttt{.data};
+    \item configurare i registri di ambiente (es. \texttt{mtvec});
+    \item trasferire il controllo alla funzione \texttt{main()} scritta in Rust.
+\end{itemize}
+
+Il file incluso \texttt{link.x} contiene le definizioni delle sezioni di memoria attese dal runtime, i simboli speciali (\texttt{\_stack\_start}, \texttt{\_heap\_start}, ecc.) e le regole di allineamento necessarie per una corretta esecuzione in ambiente bare-metal.  
+Questa struttura modulare consente di mantenere separata la logica di progetto del kernel dalle impostazioni di basso livello del linker, semplificando la manutenzione e garantendo compatibilità con altri target RISC-V supportati da Rust.
+
+\subsubsection*{Layout di memoria: \texttt{memory.x}}
+
+In un sistema bare-metal non esiste un sistema operativo che si occupa di assegnare le aree di memoria al programma: è quindi il firmware (o, in questo caso, direttamente il nostro progetto) a dover descrivere al linker dove si trovano RAM e, eventualmente, ROM e periferiche.  
+Il file \texttt{memory.x} svolge proprio questa funzione, dichiarando le regioni di memoria disponibili e fornendo i nomi delle aree che il runtime Rust si aspetta di trovare.
+
+Nel caso della macchina \texttt{virt} di QEMU per RISC-V, la RAM è esposta a partire dall’indirizzo \texttt{0x80000000}. Questo coincide con la configurazione tipica usata anche da molti firmware RISC-V di riferimento, per cui è naturale adottare lo stesso indirizzo:
+
+\begin{center}
+\begin{verbatim}
+MEMORY {
+  RAM : ORIGIN = 0x80000000, LENGTH = 16M
+}
+\end{verbatim}
+\end{center}
+
+Qui viene definita una sola regione, chiamata \texttt{RAM}, lunga 16~MiB. Per un prototipo di kernel è più che sufficiente e, soprattutto, mantiene semplice il modello di memoria: tutto vive in RAM.
+
+\paragraph{Alias delle regioni}
+Il crate \texttt{riscv-rt} (come altri runtime embedded Rust) si aspetta che il linker conosca alcune regioni “logiche”, ad esempio dove mettere il codice, i dati inizializzati, lo stack e l’heap.  
+Poiché in questo progetto tutto risiede nella stessa RAM, il file \texttt{memory.x} crea semplicemente degli alias che fanno puntare tutte queste regioni al medesimo blocco:
+
+\begin{center}
+\begin{verbatim}
+REGION_ALIAS("REGION_TEXT",   RAM);
+REGION_ALIAS("REGION_RODATA", RAM);
+REGION_ALIAS("REGION_DATA",   RAM);
+REGION_ALIAS("REGION_BSS",    RAM);
+REGION_ALIAS("REGION_HEAP",   RAM);
+REGION_ALIAS("REGION_STACK",  RAM);
+\end{verbatim}
+\end{center}
+
+Questo significa: “se il runtime vuole mettere il codice in \texttt{REGION\_TEXT}, in realtà mettilo in \texttt{RAM}; se vuole lo stack in \texttt{REGION\_STACK}, usa comunque \texttt{RAM}”, e così via.  
+È un modo elegante per mantenere compatibile il progetto con \texttt{riscv-rt} senza dover definire tante regioni distinte.
+
+\paragraph{Posizionamento dello stack}
+Poiché la RAM va da \texttt{0x80000000} a \texttt{0x80000000 + 16M}, possiamo usare la “cima” della RAM come punto di partenza per lo stack della CPU, facendolo crescere verso il basso (comportamento tipico sulle architetture RISC-V):
+
+\begin{center}
+\begin{verbatim}
+_stack_start = ORIGIN(RAM) + LENGTH(RAM);
+\end{verbatim}
+\end{center}
+
+Questo simbolo viene poi usato dal codice di bootstrap (quello richiamato da \texttt{\_start}) per inizializzare il registro dello stack.  
+Mettere lo stack in alto ha due vantaggi: non “schiaccia” le sezioni del programma e rende più facile il debugging, perché il resto del codice cresce dal basso verso l’alto.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1, every node/.style={font=\footnotesize, align=center}]
+% Contorno memoria
+\draw[thick] (0,0) rectangle (4,8);
+
+% Sezioni (dal basso verso l'alto)
+\fill[gray!10] (0,0) rectangle (4,1);
+\node[text=black] at (2,0.5) {\texttt{.text / .rodata}};
+
+\fill[gray!20] (0,1) rectangle (4,2);
+\node[text=black] at (2,1.5) {\texttt{.data}};
+
+\fill[gray!10] (0,2) rectangle (4,3);
+\node[text=black] at (2,2.5) {\texttt{.bss}};
+
+\fill[gray!30] (0,3) rectangle (4,4);
+\node[text=white] at (2,3.5) {\texttt{.tasks (stack RTOS)}};
+
+\fill[gray!60] (0,4) rectangle (4,8);
+\node[text=white] at (2,6) {\texttt{Stack CPU (↓)}};
+
+% Indirizzi
+\node[anchor=east, font=\footnotesize] at (0,0) {\texttt{0x80000000}};
+\node[anchor=east, font=\footnotesize] at (0,8) {\texttt{0x81000000}};
+
+% Frecce direzionali
+\draw[->, thick] (4.3,7.7) -- (4.3,4.4) node[midway, right] {\footnotesize crescita stack};
+\draw[->, thick] (4.3,0.3) -- (4.3,3.7) node[midway, right] {\footnotesize crescita sezioni};
+
+\end{tikzpicture}
+\caption{Organizzazione della memoria del kernel.}
+\label{fig:memory_layout}
+\end{figure}
+
+\paragraph{Sezione per gli stack dei task}
+Poiché il kernel gestisce più task e i loro stack sono statici (niente allocazione dinamica), è utile riservare una zona di RAM dedicata solo a loro.  
+Per questo è stata aggiunta una sezione personalizzata:
+
+\begin{center}
+\begin{verbatim}
+.tasks (NOLOAD) : ALIGN(16) {
+  __task_stack_start = .;
+  . += 16K;   /* 16 KiB total budget for all task stacks */
+  __task_stack_end = .;
+} > RAM
+\end{verbatim}
+\end{center}
+
+I dettagli importanti qui sono tre:
+
+\begin{itemize}
+    \item \textbf{\texttt{(NOLOAD)}}: indica al linker che questa sezione non deve essere caricata da file (non ha contenuto iniziale), ma solo “riservata” in RAM. È perfetto per gli stack, che devono solo esistere, non contenere dati iniziali;
+    \item \textbf{\texttt{ALIGN(16)}}: allinea l’area a 16 byte, così gli stack dei task possono partire con un allineamento corretto per RISC-V;
+    \item \textbf{simboli \texttt{\_\_task\_stack\_start} e \texttt{\_\_task\_stack\_end}}: sono etichette che puoi importare dal codice Rust (con \texttt{extern "C"}) per sapere dove si trova l’area riservata agli stack e suddividerla tra i vari task.
+\end{itemize}
+
+\paragraph{Perché tutto in un’unica RAM?}
+Tenere \emph{tutto} dentro un’unica regione ha un vantaggio preciso per una tesi su un RTOS avionico: il layout è banale da spiegare, facile da verificare e non dipende da periferiche o MAP di memoria complesse.  
+In più, essendo l’indirizzo della RAM noto e fisso (\texttt{0x80000000}), è immediato confrontare il binario caricato da QEMU con ciò che il linker si aspettava, riducendo le possibilità di errore.
+
+\newpage
+In sintesi, \texttt{memory.x} fa tre cose:
+\begin{enumerate}
+    \item dichiara dove sta la RAM del sistema simulato;
+    \item adatta i nomi delle regioni a quelli attesi dal runtime Rust;
+    \item riserva subito lo spazio per gli stack dei task, così il kernel non deve “inventarselo” a runtime.
+\end{enumerate}
+
+\subsection{Configurazione della Toolchain e del Processo di Compilazione}
+
+La toolchain di sviluppo è interamente basata su Rust, configurata per il target \texttt{riscv64imac-unknown-none-elf} e orientata alla generazione di codice bare-metal conforme ai requisiti di un sistema real-time minimale.  
+L’ambiente di compilazione è stato esteso per integrare direttamente l’esecuzione del binario sul simulatore QEMU, consentendo di costruire e testare il kernel con un unico comando \texttt{cargo run}.
+
+Questa integrazione è realizzata tramite il file \texttt{.cargo/config.toml}, che definisce il target di compilazione, il \emph{runner} predefinito e i parametri di collegamento del linker:
+
+\begin{center}
+\begin{verbatim}
+[build]
+target = "riscv64imac-unknown-none-elf"
+
+[target.riscv64imac-unknown-none-elf]
+runner = [
+  "qemu-system-riscv64",
+  "-machine", "virt",
+  "-bios", "none",
+  "-nographic",
+  "-serial", "mon:stdio",
+  "-kernel"
+]
+
+rustflags = [
+  "-C", "link-arg=-Tmemory.x",
+  "-C", "link-arg=-Tlink.ld",
+  "-C", "target-feature=+zicsr"
+]
+\end{verbatim}
+\end{center}
+
+Le opzioni principali configurano la piattaforma virtuale e il processo di compilazione:
+\begin{itemize}
+    \item \texttt{-machine virt}: seleziona la macchina generica RISC-V fornita da QEMU, dotata di periferiche standard come CLINT (timer) e UART0;
+    \item \texttt{-bios none}: disabilita il firmware esterno (es. OpenSBI), consentendo al kernel di avviarsi direttamente da \texttt{\_start};
+    \item \texttt{-nographic} e \texttt{-serial mon:stdio}: redirigono l’output seriale sul terminale, semplificando il debug e la registrazione dei log;
+    \item \texttt{-kernel}: carica ed esegue direttamente il file ELF prodotto dal compilatore Rust;
+    \item \texttt{rustflags}: collega esplicitamente gli script di link (\texttt{memory.x}, \texttt{link.ld}) e abilita l’estensione \texttt{Zicsr}, necessaria per l’accesso ai registri di controllo e stato (CSR) in modalità privilegiata.
+\end{itemize}
+
+\medskip
+La toolchain Rust, in questa configurazione, include solo la \texttt{core library}, in quanto l’ambiente bare-metal non supporta le funzionalità della \texttt{std}.  
+Il file \texttt{Cargo.toml} gestisce le dipendenze e i profili di compilazione: l’impostazione \texttt{panic=abort} garantisce un comportamento deterministico in caso di errore, conforme ai vincoli di un sistema real-time.
+
+\begin{itemize}
+    \item \textbf{Build.rs}: compila i file assembly a basso livello (\texttt{boot.S}, \texttt{trap.S}) tramite il crate \texttt{cc}, generando la libreria statica \texttt{libriscv\_asm.a} che viene linkata automaticamente al binario Rust.
+\end{itemize}
+
+\begin{center}
+\begin{verbatim}
+let mut build = cc::Build::new();
+build
+  .files(["asm/trap.S", "asm/boot.S"])
+  .flag("-march=rv64imac_zicsr")
+  .flag("-mabi=lp64")
+  .compile("riscv_asm");
+\end{verbatim}
+\end{center}
+
+\begin{itemize}
+    \item \textbf{Strumenti LLVM}: \texttt{llvm-objdump} e \texttt{llvm-size} vengono utilizzati per ispezionare il binario, verificare il corretto posizionamento delle sezioni e analizzare il footprint complessivo del kernel;
+    \item \textbf{Script di build personalizzati}: automatizzano la generazione delle immagini e l’esecuzione dei test in QEMU, garantendo riproducibilità e coerenza durante tutto il ciclo di sviluppo.
+\end{itemize}
+
+\medskip
+Questa infrastruttura fornisce un flusso di compilazione unificato che integra codice Rust, assembly e linker script in un unico processo controllato.  
+L’obiettivo non è solo ottenere un eseguibile funzionante, ma assicurare che ogni fase del build sia tracciabile, ripetibile e coerente con le specifiche architetturali definite per il kernel RTOS.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.5cm and 2.5cm,
+  >=latex,
+  box/.style={rectangle, draw, rounded corners, minimum width=3.5cm, minimum height=1cm, align=center}
+]
+
+% Nodi principali
+\node[box] (rustsrc) {Codice Rust \\ (\texttt{src/*.rs})};
+\node[box, below=of rustsrc] (cargo) {Cargo + rustc \\ (\texttt{cargo build})};
+\node[box, left=of cargo] (asm) {Codice Assembly \\ (\texttt{boot.S}, \texttt{trap.S})};
+\node[box, right=of cargo] (linkers) {Linker Script \\ (\texttt{memory.x}, \texttt{link.ld})};
+\node[box, below=of cargo] (elf) {Binario ELF \\ (\texttt{rtos-riscv-do178c})};
+\node[box, below=of elf] (qemu) {Esecuzione in QEMU \\ (\texttt{qemu-system-riscv64})};
+
+% Frecce
+\draw[->] (rustsrc) -- (cargo);
+\draw[->] (asm) -- (cargo) node[midway, above, sloped] {\scriptsize build.rs};
+\draw[->] (linkers) -- (cargo);
+\draw[->] (cargo) -- (elf);
+\draw[->] (elf) -- (qemu);
+
+\end{tikzpicture}
+\caption{Flusso di compilazione e generazione del binario per il kernel RTOS.}
+\label{fig:build_flow}
+\end{figure}
+
+
+\section{Architettura e Fasi di Implementazione}
+
+Lo sviluppo del kernel è stato pianificato secondo un approccio \textbf{incrementale e modulare}, in cui ogni fase introduce un insieme circoscritto di funzionalità, costruite a partire da quelle consolidate nelle fasi precedenti.  
+Questa strategia ha permesso di contenere la complessità di ciascun passo, facilitando l’analisi, la verifica e la tracciabilità del codice rispetto ai requisiti.
+
+Pur ispirandosi ai principi del DO-178C, che prevedono una stretta integrazione tra sviluppo e verifica, nel presente progetto la verifica approfondita è stata collocata al termine della fase implementativa, per ragioni di semplicità metodologica.  
+Ciononostante, ogni incremento è stato concepito come unità verificabile a sé stante: la struttura modulare del kernel consente di associare a ciascun componente un insieme preciso di requisiti e casi di test, che saranno poi applicati in modo sistematico nella fase di validazione finale.
+
+In tal modo, lo sviluppo procede in modo controllato e tracciabile, mantenendo coerenza con la filosofia del DO-178C pur adottando un approccio pratico adatto a un progetto di ricerca e prototipazione.
+
+\subsection{Set Up dell’Ambiente di Esecuzione}
+
+La prima fase dello sviluppo ha riguardato la predisposizione delle componenti di base necessarie all’esecuzione del kernel.  
+In particolare, l’obiettivo era definire un’infrastruttura stabile per la gestione delle \emph{trap}, meccanismo centrale dell’architettura RISC-V che consente di intercettare eventi asincroni (\textit{interrupt}) ed errori sincroni (\textit{exceptions}).  
+Questa fase rappresenta il fondamento per tutte le funzionalità successive, in quanto permette al kernel di reagire in modo controllato agli eventi di sistema, prerequisito essenziale per il supporto del multitasking e del comportamento real-time.
+
+Il lavoro è stato articolato nei seguenti passaggi principali:
+\begin{itemize}
+    \item \textbf{Definizione del vettore delle trap} (\textit{trap vector table}): è stato implementato il punto di ingresso unico alle trap, il cui indirizzo è caricato nel registro \texttt{mtvec}.  
+    Questo consente di redirigere automaticamente il flusso di controllo al gestore di trap quando si verifica un’eccezione o un’interruzione.
+
+    \item \textbf{Implementazione del gestore di trap} (\textit{trap handler}): la routine principale distingue tra eccezioni e interruzioni, analizzando i registri \texttt{mcause} e \texttt{mstatus}.  
+    Tale distinzione è necessaria per adottare strategie di risposta differenti, per esempio, terminare l’esecuzione in caso di errore fatale o eseguire routine periodiche in caso di interrupt temporale.
+
+    \item \textbf{Gestione delle eccezioni di base}: sono state trattate le eccezioni più comuni, tra cui istruzioni illegali, accessi a memoria non validi e chiamate di sistema (\texttt{ECALL}) generate dal contesto macchina.  
+    In caso di errore non recuperabile, il kernel entra in stato di \texttt{panic}, fornendo informazioni diagnostiche minime e bloccando l’esecuzione.
+
+    \item \textbf{Abilitazione e configurazione delle interruzioni temporali}: il timer interno del core, accessibile tramite i registri \texttt{mtime} e \texttt{mtimecmp} del \emph{Core Local Interruptor} (CLINT), è stato programmato per generare interruzioni periodiche con risoluzione di 1~ms.  
+    Queste interruzioni costituiscono la base temporale del sistema e scandiscono l’esecuzione dello scheduler e dei servizi temporizzati.
+
+    \item \textbf{Predisposizione per interruzioni esterne}: è stata inoltre impostata la struttura per la futura integrazione del \emph{Platform-Level Interrupt Controller} (PLIC), che permetterà la gestione di interruzioni provenienti da periferiche esterne, anche se non ancora implementate in questa fase.
+
+    \item \textbf{Salvataggio e ripristino del contesto}: nel trap handler sono state definite le operazioni di salvataggio e ripristino dei registri generali e privilegiati.  
+    Questa logica costituisce la base del meccanismo di \textit{context switch}, che verrà successivamente esteso per il passaggio tra task concorrenti.
+\end{itemize}
+
+La configurazione corretta del sistema di trap garantisce che ogni evento di sistema sia gestito in modo deterministico e sotto controllo del kernel, assicurando stabilità durante le fasi successive di sviluppo e verifica.
+
+\subsubsection*{Gestione delle Trap ed Eccezioni}
+
+La gestione delle trap è uno dei meccanismi centrali dell’architettura RISC-V e costituisce il fondamento di ogni sistema operativo o kernel in modalità privilegiata.  
+Nel kernel sviluppato, tale gestione è stata suddivisa in due livelli distinti:
+
+\begin{itemize}
+    \item una parte in \textbf{assembly} (\texttt{trap.S}), che si occupa del salvataggio del contesto e del passaggio di controllo al codice Rust;
+    \item una parte in \textbf{Rust} (\texttt{trap.rs}), responsabile della decodifica della causa dell’evento e della chiamata della routine appropriata.
+\end{itemize}
+
+Questa separazione permette di mantenere la sezione assembly minimale , confinata al codice realmente dipendente dall’ISA , mentre tutta la logica di gestione rimane in Rust, linguaggio più sicuro e facilmente verificabile.
+
+\paragraph{Handler in Rust}
+Il gestore delle trap riceve come argomento il puntatore allo stack (\texttt{sp}), che identifica il frame di contesto salvato in assembly.  
+Vengono letti i registri \texttt{mcause} e \texttt{mepc}, da cui è possibile determinare se la trap è un’\emph{interruzione} o un’\emph{eccezione} e quale codice di causa la identifica.  
+Il frammento seguente mostra la struttura del gestore:
+
+\begin{center}
+\begin{verbatim}
+#[no_mangle]
+pub extern "C" fn trap_handler(sp: *mut usize) -> *mut usize {
+    unsafe {
+        let mcause_val = *sp.offset(OFF_MCAUSE);
+        let mepc_val   = *sp.offset(OFF_MEPC);
+
+        // Manual decode
+        let xlen_msb = (core::mem::size_of::<usize>() * 8 - 1) as u32;
+        let is_interrupt = ((mcause_val >> xlen_msb) & 1) != 0;
+        let code = mcause_val & ((1usize << xlen_msb) - 1);
+
+        if is_interrupt {
+            match code {
+                7  => { // Machine Timer
+                    timer_interrupt();
+                    return schedule(sp);
+                },
+                _  => panic!("Generic Interrupt"),
+            }
+        } else {
+            match code {
+                2 => handle_illegal(),
+                5 => handle_mem_fault(),
+                7 => handle_mem_fault(),
+                11 => { // ECALL from M-mode = task_yield()
+                    *sp.offset(OFF_MEPC) = mepc_val.wrapping_add(4);
+                    return schedule(sp);
+                }
+                _ => panic!("Generic Exception"),
+            }
+            sp
+        }
+    }
+}
+\end{verbatim}
+\end{center}
+
+Le eccezioni vengono gestite in modo esplicito:
+
+\begin{itemize}
+    \item le istruzioni illegali e i fault di memoria generano un \texttt{panic} con diagnostica minimale;  
+    \item  l’\texttt{ECALL} proveniente da modalità macchina (\texttt{M-mode}) rappresenta invece la richiesta esplicita di cedere la CPU, ed è trattato come una chiamata a \texttt{task\_yield()}.
+\end{itemize}
+
+Le interruzioni temporali (\texttt{Machine Timer}) attivano la routine \texttt{timer\_interrupt()}, che aggiorna il contatore dei tick e richiama lo scheduler per un potenziale cambio di contesto.
+
+\paragraph{Sezione assembly di ingresso}
+La sezione in assembly (\texttt{trap.S}) costituisce il vero punto d’ingresso alle trap.  
+Essa salva il contesto del task corrente , inclusi i registri generali e i registri di controllo \texttt{mepc}, \texttt{mcause} e \texttt{mtval} , sullo stack corrente, prima di invocare la funzione Rust \texttt{trap\_handler}.  
+Il valore restituito da quest’ultima rappresenta lo stack pointer del prossimo contesto da eseguire, che viene quindi caricato prima di eseguire l’istruzione \texttt{mret}.  
+Questo punto rappresenta il \emph{context switch entry point}, ovvero la transizione tra un task e il successivo.
+
+\begin{center}
+\begin{verbatim}
+    .section .text.trap_entry
+    .globl trap_entry
+    .align 4
+trap_entry:
+    # Allochiamo spazio sullo stack: 20 * 8 = 160 bytes (RV64)
+    addi sp, sp, -160
+
+    sd ra, 0*8(sp)
+    sd t0, 1*8(sp)
+    sd t1, 2*8(sp)
+    sd t2, 3*8(sp)
+    sd a0, 4*8(sp)
+    sd a1, 5*8(sp)
+    sd a2, 6*8(sp)
+    sd a3, 7*8(sp)
+    sd a4, 8*8(sp)
+    sd a5, 9*8(sp)
+    sd a6, 10*8(sp)
+    sd a7, 11*8(sp)
+    sd t3, 12*8(sp)
+    sd t4, 13*8(sp)
+    sd t5, 14*8(sp)
+    sd t6, 15*8(sp)
+
+    csrr t0, mepc
+    sd   t0, 16*8(sp)
+    csrr t1, mcause
+    sd   t1, 17*8(sp)
+    csrr t2, mtval
+    sd   t2, 18*8(sp)
+
+    # Chiamiamo Rust: a0 = SP corrente (frame base)
+    mv   a0, sp
+    call trap_handler        # extern "C" fn trap_handler(*mut usize) -> *mut usize
+
+    # context switch point 
+    # Usiamo lo stack pointer ritornato in a0
+    mv   sp, a0
+
+    # Reimpostiamo mepc dal frame (slot 16) prima mret
+    ld   t0, 16*8(sp)
+    csrw mepc, t0
+
+    # Reimpostiamo i registri salvati
+    ld ra, 0*8(sp)
+    ld t0, 1*8(sp)
+    ld t1, 2*8(sp)
+    ld t2, 3*8(sp)
+    ld a0, 4*8(sp)
+    ld a1, 5*8(sp)
+    ld a2, 6*8(sp)
+    ld a3, 7*8(sp)
+    ld a4, 8*8(sp)
+    ld a5, 9*8(sp)
+    ld a6, 10*8(sp)
+    ld a7, 11*8(sp)
+    ld t3, 12*8(sp)
+    ld t4, 13*8(sp)
+    ld t5, 14*8(sp)
+    ld t6, 15*8(sp)
+
+    addi sp, sp, 160
+    mret
+\end{verbatim}
+\end{center}
+
+\paragraph{Sintesi}
+La combinazione delle due sezioni realizza una catena di gestione delle trap completamente controllata dal kernel:  
+ogni evento (interruzione o eccezione) viene intercettato in assembly, trasferito in modo sicuro al codice Rust, analizzato e gestito secondo la logica appropriata.  
+Questo meccanismo costituisce il fondamento del sistema di \emph{context switching} e di tutte le funzionalità multitasking del kernel.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    font=\footnotesize,
+    node distance=1.3cm and 1.8cm,
+    >=latex,
+    box/.style={rectangle, draw, rounded corners, minimum width=4cm, minimum height=1cm, align=center, fill=gray!5},
+    io/.style={ellipse, draw, align=center, fill=gray!10},
+    decision/.style={diamond, draw, aspect=2, align=center, fill=gray!5},
+    arrow/.style={->, thick}
+]
+
+% Nodi principali
+\node[io] (event) {Evento di sistema\\(interrupt o eccezione)};
+\node[box, below=of event] (trapentry) {\textbf{trap\_entry} (Assembly)\\Salvataggio registri + lettura CSR};
+\node[box, below=of trapentry] (callrust) {\textbf{Chiamata a trap\_handler()} (Rust)};
+\node[decision, below=of callrust] (check) {Interruzione?};
+\node[box, below left=of check, xshift=-0.6cm] (timer) {Timer Interrupt\\$\rightarrow$ \texttt{timer\_interrupt()}\\Aggiornamento tick};
+\node[box, below right=of check, xshift=0.6cm] (exception) {Eccezione sincrona\\$\rightarrow$ \texttt{handle\_illegal()},\\\texttt{handle\_mem\_fault()},\\\texttt{task\_yield()}};
+\node[box, below=2.2cm of check] (schedule) {\textbf{schedule()}\\Selezione prossimo task};
+\node[box, below=of schedule] (return) {\textbf{Restituzione nuovo stack pointer}};
+\node[box, below=of return] (restore) {\textbf{Ripristino contesto} (Assembly)\\Caricamento registri + \texttt{mepc}};
+\node[io, below=of restore] (mret) {Ritorno al task successivo\\(\texttt{mret})};
+
+% Collegamenti
+\draw[arrow] (event) -- (trapentry);
+\draw[arrow] (trapentry) -- (callrust);
+\draw[arrow] (callrust) -- (check);
+\draw[arrow] (check) -- node[above left]{sì} (timer);
+\draw[arrow] (check) -- node[above right]{no} (exception);
+\draw[arrow] (timer) |- (schedule);
+\draw[arrow] (exception.west) |- (schedule.east);
+\draw[arrow] (schedule) -- (return);
+\draw[arrow] (return) -- (restore);
+\draw[arrow] (restore) -- (mret);
+
+% Decorazioni extra
+\node[anchor=east, gray] at (trapentry.west) {\scriptsize livello assembly};
+\node[anchor=east, gray] at (callrust.west) {\scriptsize livello Rust};
+
+\end{tikzpicture}
+\caption{Flusso di gestione delle trap: dal segnale hardware al ritorno al task successivo.}
+\label{fig:trap_flow}
+\end{figure}
+
+
+\subsubsection*{Timer di Sistema}
+
+Il sottosistema di temporizzazione è basato sul \textbf{Core Local Interruptor (CLINT)}, componente standard dell’architettura RISC-V responsabile della gestione dei timer e delle interruzioni software locali.  
+Il CLINT espone due registri a 64 bit:
+\begin{itemize}
+    \item \texttt{mtime}: contatore monotono che incrementa costantemente in base alla frequenza del clock di sistema;
+    \item \texttt{mtimecmp}: registro di confronto che genera un’interruzione quando \texttt{mtime} raggiunge il valore impostato.
+\end{itemize}
+
+Il kernel utilizza questa infrastruttura per implementare il \textbf{tick di sistema}, base temporale necessaria per funzioni come il ritardo temporizzato (\texttt{delay\_ms()}) e lo scheduling periodico dei task.  
+La funzione \texttt{init\_timer()} inizializza il meccanismo impostando il primo valore di confronto e abilitando l’interruzione corrispondente, mentre la routine \texttt{timer\_interrupt()} si occupa di riarmare il timer a ogni tick e di notificare il kernel dello scadere del periodo temporale.
+
+\begin{center}
+\begin{verbatim}
+pub fn timer_interrupt() {
+    unsafe {
+        // Notifica kernel dello scadere del tick
+        rtos_on_timer_tick();
+        // Legge il contatore corrente
+        let now = read(MTIME);
+        // Riarmo timer (+10.000 cicli circa 1 ms)
+        write(MTIMECMP, now + 10_000);
+    }
+}
+\end{verbatim}
+\end{center}
+
+In questa configurazione, l’intervallo di tick è fissato a \textbf{1~ms}, corrispondente a un incremento di 10.000 cicli sul clock di 10~MHz tipico della macchina virtuale \texttt{virt} di QEMU.  
+Ogni volta che il confronto viene raggiunto, il CLINT genera un’interruzione di tipo \texttt{Machine Timer}, gestita dal kernel come evento periodico.  
+Questo meccanismo fornisce la base per lo scheduler cooperativo e per il rispetto dei vincoli temporali tipici di un RTOS.
+
+\subsubsection*{Panic Handler Personalizzato}
+
+Per garantire un comportamento deterministico anche in condizioni di errore, è stato implementato un \textbf{panic handler} personalizzato, che sostituisce il gestore predefinito di Rust.  
+In un ambiente bare-metal, l’assenza di un sistema operativo impone che ogni condizione di errore venga gestita direttamente dal kernel; per questo motivo il panic handler svolge un ruolo essenziale sia per la sicurezza sia per il debug.
+
+Le sue principali funzioni sono:
+\begin{itemize}
+    \item \textbf{Disabilitare deterministicamente tutte le interruzioni}, prevenendo ulteriori trap o comportamenti non prevedibili;
+    \item \textbf{Stampare tramite UART} informazioni diagnostiche dettagliate sullo stato del sistema, tra cui i registri di controllo \texttt{mcause}, \texttt{mepc} e \texttt{mtval};
+    \item \textbf{Descrivere la causa dell’errore} distinguendo tra eccezioni e interruzioni e indicando il tipo di evento che ha portato al crash;
+    \item \textbf{Bloccare in modo sicuro l’esecuzione}, evitando il proseguimento in uno stato inconsistente.
+\end{itemize}
+
+\begin{center}
+\begin{verbatim}
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    unsafe {
+        // Disabilita tutte le interruzioni
+        mstatus::clear_mie();
+        mie::clear_mext();
+        mie::clear_mtimer();
+        mie::clear_msoft();
+    }
+
+    puts("=== PANIC ===\n");
+
+    // Informazioni di contesto
+    if let Some(location) = info.location() {
+        puts("File: "); puts(location.file());
+        puts("Line: "); put_dec(location.line() as usize);
+    }
+
+    // Diagnostica hardware
+    let cause = mcause::read();
+    let pc    = mepc::read();
+    let tval  = mtval::read();
+
+    puts("Raw mcause bits: 0x"); put_hex(cause.bits());
+    match cause.cause() {
+        mcause::Trap::Exception(code) => { ... }
+        mcause::Trap::Interrupt(code) => { ... }
+    }
+
+    puts("mepc (PC): 0x"); put_hex(pc);
+    puts("mtval    : 0x"); put_hex(tval);
+
+    // Arresto sicuro
+    loop { core::sync::atomic::compiler_fence(Ordering::SeqCst); }
+}
+\end{verbatim}
+\end{center}
+
+Il comportamento risultante è pienamente deterministico: al verificarsi di un errore, il sistema disattiva gli interrupt, stampa un rapporto diagnostico minimale e si arresta in modo controllato.  
+Questo approccio rispetta i principi del DO-178C relativi alla prevedibilità del comportamento in caso di fault, fornendo inoltre uno strumento efficace di \emph{debug} durante le fasi di sviluppo e test.
+
+\subsection{Modello di Memoria e Task}
+
+Il kernel adotta un modello di memoria \textbf{statico e deterministico}, progettato per garantire prevedibilità temporale e isolamento tra i task.  
+Tale approccio semplifica la verifica e il debug in ambiente embedded, riducendo al minimo le fonti di indeterminatezza tipiche dei sistemi con allocazione dinamica.
+
+Ogni task dispone di uno \textbf{stack dedicato}, collocato in una sezione di memoria separata (\texttt{.tasks}), riservata a compile-time tramite lo script di linking.  
+Questo schema assicura che i contesti di esecuzione rimangano indipendenti e che eventuali errori di stack overflow siano confinati, preservando la stabilità del sistema.  
+
+La gestione dei task è organizzata tramite strutture come il \textbf{Task Control Block (TCB)}, che descrivono lo stato di ciascun task e forniscono le informazioni necessarie per il salvataggio e il ripristino del contesto durante un \emph{context switch}.
+
+\subsubsection*{Stack dei Task}
+
+La sezione \texttt{.tasks}, definita nel file \texttt{memory.x}, ospita tutti gli stack dei task.  
+Lo spazio complessivo riservato è suddiviso staticamente in blocchi di uguale dimensione, calcolati in base al numero massimo di task consentiti dal sistema (\texttt{MAX\_TASKS}) e alla dimensione per-task (\texttt{TASK\_STACK\_BYTES}).  
+
+La funzione \texttt{carve\_task\_stack()} calcola per ciascun identificativo di task l’area di memoria assegnata e verifica, a compile-time, che la sezione \texttt{.tasks} sia sufficientemente ampia:
+
+\begin{center}
+\begin{verbatim}
+assert!(MAX_TASKS * TASK_STACK_BYTES <= total,
+        ".tasks too small for MAX_TASKS");
+\end{verbatim}
+\end{center}
+
+Questo modello elimina la necessità di un allocatore dinamico e consente di controllare facilmente i limiti di memoria, semplificando anche l’ispezione del contenuto degli stack durante le fasi di debug e verifica.
+
+\subsubsection*{Task Control Block (TCB)}
+
+Ogni task è rappresentato da una struttura \texttt{Tcb}, che mantiene le informazioni essenziali per il controllo e la schedulazione del processo:
+
+\begin{itemize}
+    \item \textbf{SP}: stack pointer, utilizzato per salvare e ripristinare il contesto;
+    \item \textbf{Entry}: indirizzo della funzione di ingresso del task, caricata nel registro \texttt{mepc} al primo avvio;
+    \item \textbf{State}: stato corrente del task (\texttt{Ready}, \texttt{Running}, \texttt{Blocked});
+    \item \textbf{Priority}: priorità assegnata, utilizzata dallo scheduler per la selezione del task successivo;
+    \item \textbf{stack\_lo} e \textbf{stack\_hi}: estremi dello stack, impiegati per controlli di overflow e diagnostica.
+\end{itemize}
+
+\begin{center}
+\begin{verbatim}
+#[repr(C)]
+pub struct Tcb {
+    pub sp: *mut usize,
+    pub entry: extern "C" fn(),
+    pub state: TaskState,
+    pub priority: u8,
+    pub stack_lo: *mut u8,
+    pub stack_hi: *mut u8,
+}
+\end{verbatim}
+\end{center}
+
+La creazione di un nuovo task (\texttt{create\_task()}) comporta:
+\begin{enumerate}
+    \item l’assegnazione di uno stack dedicato all’interno della sezione \texttt{.tasks};
+    \item l’inizializzazione del frame di contesto, con il program counter impostato alla funzione di ingresso;
+    \item l’inserimento del TCB corrispondente nella tabella globale dei task.
+\end{enumerate}
+
+Questo approccio, interamente statico, garantisce prevedibilità e semplifica la tracciabilità tra requisiti e implementazione, in linea con i principi del DO-178C.  
+La gestione della selezione e dell’esecuzione dei task è demandata allo \textbf{scheduler}, descritto nella sezione successiva.
+
+% arrivato qua 
+\subsection{Preemption Basata su Timer}
+
+Per implementare il multitasking \textbf{preemptive}, il kernel sfrutta il \textbf{machine timer} fornito dal \emph{Core Local Interruptor} (CLINT).  
+Il principio di funzionamento si basa sulla generazione di \emph{tick} periodici, ottenuti programmando il registro \texttt{mtimecmp} con un valore futuro rispetto al contatore \texttt{mtime}. Quando quest’ultimo raggiunge o supera tale soglia, viene sollevata un’interruzione di tipo timer in modalità macchina (\texttt{MTI}), che segnala al sistema la scadenza del periodo di tempo definito.
+
+Alla ricezione dell’interruzione, il gestore dedicato invoca la funzione \texttt{timer\_interrupt()}, che esegue due operazioni principali:  
+\begin{enumerate}
+    \item \textbf{Riarmo del timer}, incrementando il valore di \texttt{mtimecmp} per pianificare il successivo tick e garantire una periodicità costante;  
+    \item \textbf{Notifica al kernel} dello scadere del tick, consentendo l’attivazione dello scheduler.
+\end{enumerate}
+
+Lo scheduler, richiamato in questo punto, provvede al \textbf{salvataggio del contesto} del task in esecuzione (registri, stack pointer e stato della CPU) e alla successiva \textbf{selezione del prossimo task pronto}.  
+Questo meccanismo assicura che ogni task riceva una finestra temporale di esecuzione equa, abilitando la preemption anche in assenza di eventi esterni e garantendo il rispetto delle proprietà di \textbf{determinismo temporale} richieste nei sistemi real-time.
+
+
+\subsubsection*{Scheduler Round-Robin}
+
+Lo scheduler adottato segue una politica \textbf{round-robin}, scelta per la sua semplicità, prevedibilità e coerenza con i requisiti di determinismo propri dei sistemi real-time di base.  
+In questo schema, ogni task pronto all’esecuzione riceve un intervallo di tempo (\emph{time slice}) uguale agli altri, dopo il quale il controllo viene ceduto al task successivo in coda.  
+Questa strategia, pur non basandosi su priorità, garantisce un’equa ripartizione del tempo di CPU e un comportamento facilmente analizzabile, caratteristiche importanti in contesti certificabili.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>=stealth, node distance=1.5cm, thick]
+
+% Timeline
+\draw[->] (0,0) -- (12,0) node[right]{\small Tempo};
+
+% Time slices
+\foreach \x in {0,2,4,6,8,10}{
+    \draw[dashed] (\x,0.4) -- (\x,-0.4);
+}
+
+% Labels for ticks
+\foreach \x/\t in {0/Tick 0,2/Tick 1,4/Tick 2,6/Tick 3,8/Tick 4,10/Tick 5}{
+    \node[below] at (\x,-0.4) {\scriptsize \t};
+}
+
+% Task execution blocks
+\draw[fill=blue!20,rounded corners=2pt] (0,0.4) rectangle (2,1.2) node[pos=.5]{\scriptsize Task A};
+\draw[fill=green!20,rounded corners=2pt] (2,0.4) rectangle (4,1.2) node[pos=.5]{\scriptsize Task B};
+\draw[fill=orange!20,rounded corners=2pt] (4,0.4) rectangle (6,1.2) node[pos=.5]{\scriptsize Task C};
+\draw[fill=blue!20,rounded corners=2pt] (6,0.4) rectangle (8,1.2) node[pos=.5] {\scriptsize Task A};
+\draw[fill=green!20,rounded corners=2pt] (8,0.4) rectangle (10,1.2) node[pos=.5]{\scriptsize Task B};
+\draw[fill=orange!20,rounded corners=2pt] (10,0.4) rectangle (12,1.2) node[pos=.5]{\scriptsize Task C};
+
+\end{tikzpicture}
+\caption{Esecuzione ciclica dei task con politica Round-Robin}
+\end{figure}
+
+La funzione \texttt{schedule}, invocata dal contesto di trap in seguito all’interruzione di timer, gestisce la commutazione del contesto (\emph{context switch}) tra task.  
+Essa aggiorna il \textbf{Task Control Block (TCB)} del task corrente, salvando il valore dello \texttt{stack pointer} e riportandone lo stato a \texttt{Ready}.  
+Successivamente scansiona la lista dei TCB per individuare il prossimo task in stato \texttt{Ready}, ne aggiorna lo stato a \texttt{Running} e restituisce il nuovo stack pointer al livello macchina, che ripristinerà il contesto del task selezionato.
+
+\begin{center}
+\begin{verbatim}
+pub unsafe fn schedule(current_sp: *mut usize) -> *mut usize {
+    if let Some(t) = &mut TCBS[CURRENT] {
+        t.sp = current_sp;
+        if t.state == TaskState::Running {
+            t.state = TaskState::Ready;
+        }
+    }
+    let next = next_ready(CURRENT);
+    CURRENT = next;
+    if let Some(t) = &mut TCBS[CURRENT] {
+        t.state = TaskState::Running;
+        return t.sp;
+    }
+    current_sp
+}
+\end{verbatim}
+\end{center}
+
+La struttura del TCB è già predisposta per l’estensione verso politiche più complesse: il campo \texttt{priority}, attualmente non utilizzato, consentirà di implementare in futuro meccanismi di \emph{fixed-priority} o \emph{rate-monotonic scheduling}, più adatti a sistemi con vincoli temporali stringenti.  
+Questa modularità del design consente di evolvere il kernel mantenendo un’elevata \textbf{tracciabilità} e una chiara separazione tra meccanismi di scheduling e gestione del contesto, aspetti fondamentali ai fini della conformità al DO-178C.
+
+\subsubsection*{Avvio del Primo Task}
+
+L’avvio del sistema multitasking avviene tramite la funzione \texttt{start\_first\_task}, responsabile dell’inizializzazione del primo contesto utente.  
+La funzione scansiona la lista dei \textbf{Task Control Block} (TCB) alla ricerca del primo task nello stato \texttt{Ready}, lo marca come \texttt{Running} e imposta il suo identificativo come corrente nel registro globale \texttt{CURRENT}.  
+
+A questo punto il controllo viene trasferito a livello assembly tramite la routine \texttt{\_\_rtos\_boot\_with\_sp}, che esegue il \textbf{bootstrap del contesto} caricando il valore dello stack pointer e ripristinando lo stato del task dal suo stack salvato.  
+Questo passaggio consente di iniziare l’esecuzione del primo task in modalità macchina (\emph{Machine Mode}), con lo stato dei registri e il punto di ingresso coerenti con il contesto definito in fase di inizializzazione.
+
+Da questo momento in avanti, l’esecuzione del sistema è completamente gestita dallo scheduler, richiamato periodicamente dai tick del timer, che garantisce la rotazione tra i task e il mantenimento del determinismo temporale del sistema.
+
+\begin{center}
+\begin{verbatim}
+pub unsafe fn start_first_task() -> ! {
+    for i in 0..MAX_TASKS {
+        if let Some(t) = &TCBS[i] {
+            if t.state == TaskState::Ready {
+                CURRENT = i;
+                let t_mut = TCBS[i].as_mut().unwrap();
+                t_mut.state = TaskState::Running;
+                __rtos_boot_with_sp(t_mut.sp);
+            }
+        }
+    }
+    loop {}
+}
+\end{verbatim}
+\end{center}
+
+La routine assembly \texttt{\_\_rtos\_boot\_with\_sp} esegue il vero e proprio passaggio di controllo al task, impostando il contesto hardware e restituendo il flusso all’indirizzo memorizzato nel registro \texttt{mepc} del task.  
+Essa carica i registri generali dal frame di stack, ripristina lo stato della CPU e utilizza l’istruzione \texttt{mret} per avviare l’esecuzione in modalità macchina con le interruzioni abilitate.
+
+\begin{center}
+\begin{verbatim}
+    .section .text
+    .globl __rtos_boot_with_sp
+__rtos_boot_with_sp:
+    mv   sp, a0
+    ld   t0, 16*8(sp)
+    csrw mepc, t0
+    ld ra, 0*8(sp)
+    ld t0, 1*8(sp)
+    ld t1, 2*8(sp)
+    ld t2, 3*8(sp)
+    ld a0, 4*8(sp)
+    ld a1, 5*8(sp)
+    ld a2, 6*8(sp)
+    ld a3, 7*8(sp)
+    ld a4, 8*8(sp)
+    ld a5, 9*8(sp)
+    ld a6, 10*8(sp)
+    ld a7, 11*8(sp)
+    ld t3, 12*8(sp)
+    ld t4, 13*8(sp)
+    ld t5, 14*8(sp)
+    ld t6, 15*8(sp)
+    addi sp, sp, 160
+    # assicurarsi di ritornare in M-Mode con le interruzioni abilitate dopo mret
+    li   t1, (3 << 11)     # MPP=11 (Machine)
+    csrs mstatus, t1
+    li   t1, (1 << 7)      # MPIE=1
+    csrs mstatus, t1
+    mret
+\end{verbatim}
+\end{center}
+
+
+
+\subsection{Context Switching}
+Il context switch rappresenta il cuore del multitasking, poiché consente di sospendere l’esecuzione di un task e riprendere quella di un altro, preservando correttamente lo stato della CPU.  
+Nel nostro kernel, il context switch è stato realizzato tramite una combinazione di codice assembly e Rust:
+
+\begin{itemize}
+    \item \textbf{Salvataggio e ripristino dei registri}: all’ingresso in trap, la routine \texttt{trap\_entry} in assembly salva su stack tutti i registri generali e i registri privilegiati (\texttt{mepc}, \texttt{mcause}, \texttt{mtval}). Al termine del gestore, gli stessi valori vengono ripristinati, garantendo che il task riprenda dal punto in cui era stato interrotto.
+    \item \textbf{Interfaccia con lo scheduler}: il puntatore allo stack del task corrente viene passato al gestore Rust (\texttt{trap\_handler}), che a sua volta invoca la funzione \texttt{schedule}. Quest’ultima decide quale task eseguire successivamente e restituisce lo stack pointer del task selezionato. L’assembly provvede quindi a caricarlo prima di eseguire l’istruzione \texttt{mret}.
+    \item \textbf{Cambio di contesto volontario}: tramite la funzione \texttt{task\_yield()}, un task può invocare un’istruzione \texttt{ECALL}, che genera una trap gestita come un normale evento di scheduling.
+    \item \textbf{Cambio di contesto automatico}: il timer hardware del CLINT, configurato per generare tick periodici, solleva un’interruzione che viene trattata dal kernel come punto di preemption. In questo caso, il task corrente viene sospeso e un altro pronto all’esecuzione viene selezionato.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm and 2.5cm,
+    >=latex,
+    box/.style={rectangle, draw, rounded corners, minimum width=3.5cm, minimum height=1cm, align=center}
+]
+\node[box] (event) {Trap o Timer Interrupt};
+\node[box, below=of event] (asm) {\texttt{trap\_entry} (Assembly) \\ Salvataggio registri};
+\node[box, below=of asm] (rust) {\texttt{trap\_handler} (Rust) \\ Decodifica causa};
+\node[box, below left=of rust, xshift=-3cm] (yield) {\texttt{task\_yield()} \\ (ECALL)};
+\node[box, below=of rust] (sched) {\texttt{schedule()} \\ Selezione prossimo task};
+\node[box, below=of sched] (mret) {Ripristino registri \\ \texttt{mret} → nuovo task};
+
+\draw[->] (event) -- (asm);
+\draw[->] (asm) -- (rust);
+\draw[->] (rust) -- (sched);
+\draw[->] (sched) -- (mret);
+\draw[->, dashed] (yield) -- (rust);
+\end{tikzpicture}
+
+\caption{Flusso di gestione della trap e cambio di contesto}
+\label{fig:trap-flow}
+\end{figure}
+
+
+Grazie a questa logica, il kernel supporta sia lo \emph{yield cooperativo} sia la \emph{preemption basata su timer}, integrando due modalità complementari di multitasking.
+
+\subsection{Servizi di Base del Kernel}
+
+Sulla base dei meccanismi di \textbf{context switching} e \textbf{scheduling preemptive}, il kernel espone un insieme di API che costituiscono i \textbf{servizi di base} per i task utente.  
+Queste primitive forniscono un’interfaccia minimale ma completa per la creazione, la cooperazione e la sincronizzazione dei processi concorrenti, garantendo al contempo semplicità di analisi e determinismo temporale , caratteristiche fondamentali nei sistemi real-time certificabili.
+
+\subsubsection*{Gestione dei Task}
+
+La funzione \texttt{task\_create()} si occupa dell’\textbf{istanza­zione di nuovi task}, allocando dinamicamente uno stack dedicato e inizializzando il relativo \emph{Task Control Block} (TCB).  
+Ogni task dispone di un contesto di esecuzione isolato e viene inserito nella coda di scheduling con stato \texttt{Ready}, in attesa di essere pianificato.
+
+Durante l’esecuzione, un task può cedere volontariamente la CPU tramite la primitiva \texttt{task\_yield()}, che genera un’istruzione \texttt{ECALL} e provoca un’eccezione controllata verso il kernel.  
+In risposta, il gestore di trap salva il contesto del task corrente e richiama lo scheduler, consentendo così un cambio di contesto cooperativo.
+
+\begin{center}
+\begin{verbatim}
+#[inline(always)]
+pub fn task_yield() {
+    unsafe { core::arch::asm!("ecall", options(nostack, nomem)) }
+}
+\end{verbatim}
+\end{center}
+
+\subsubsection*{Gestione del Tempo}
+
+Il kernel mantiene un contatore globale di \emph{tick} hardware, incrementato dal timer a ogni interruzione periodica.  
+Su questa base è stato implementato il servizio \texttt{delay\_ms()}, che consente di sospendere temporaneamente un task fino al raggiungimento della scadenza temporale richiesta.  
+Durante l’attesa, il task invoca ripetutamente \texttt{task\_yield()}, permettendo ad altri processi di eseguire e garantendo una temporizzazione deterministica senza spreco di cicli CPU.
+
+\begin{center}
+\begin{verbatim}
+pub fn delay_ms(ms: u64) {
+    let deadline = ticks().wrapping_add(ms_to_ticks(ms));
+    while (ticks().wrapping_sub(deadline) as i64) < 0 {
+        task_yield();
+    }
+}
+\end{verbatim}
+\end{center}
+
+Questo approccio, basato su busy-wait cooperativo, è semplice ma efficace in un ambiente a priorità uniforme, e costituisce la base per l’eventuale introduzione di meccanismi di sospensione bloccante più sofisticati.
+
+\subsubsection*{Primitive di Sincronizzazione}
+
+Per garantire l’accesso sicuro alle risorse condivise, il kernel fornisce primitive di sincronizzazione leggere basate su \textbf{operazioni atomiche}.  
+Queste strutture evitano la corruzione dei dati in contesti concorrenti e mantengono la prevedibilità del sistema anche in presenza di più task attivi.
+
+\paragraph{SpinLock}  
+Lo \emph{SpinLock} è implementato tramite variabili atomiche e un ciclo di \emph{busy waiting}.  
+Per evitare attese inutilmente prolungate, il blocco integra la chiamata a \texttt{task\_yield()}, permettendo al task di rilasciare temporaneamente la CPU in caso di contesa prolungata sul lock.
+
+\begin{center}
+\begin{verbatim}
+pub struct SpinLock<T> {
+    locked: AtomicBool,
+    data: UnsafeCell<T>,
+}
+impl<T> SpinLock<T> {
+    pub fn lock(&self) -> SpinLockGuard<'_, T> {
+        while self.locked.compare_exchange(false, true,
+                  AcqRel, Acquire).is_err() {
+            task_yield();
+        }
+        SpinLockGuard { lock: self }
+    }
+}
+\end{verbatim}
+\end{center}
+
+\paragraph{Semaphore}  
+Il semaforo, basato su un contatore atomico, consente la sincronizzazione tra più task secondo il classico schema \texttt{wait()} / \texttt{post()}.  
+Quando il contatore raggiunge zero, il task chiamante cede la CPU finché un altro task non rilascia la risorsa, assicurando un coordinamento corretto e senza blocchi attivi.
+
+\begin{center}
+\begin{verbatim}
+pub struct Semaphore { count: AtomicIsize }
+impl Semaphore {
+    pub fn wait(&self) {
+        loop {
+            let c = self.count.load(Acquire);
+            if c > 0 &&
+               self.count.compare_exchange(c, c-1, AcqRel, Acquire).is_ok() {
+                return;
+            }
+            task_yield();
+        }
+    }
+    pub fn post(&self) {
+        self.count.fetch_add(1, Release);
+    }
+}
+\end{verbatim}
+\end{center}
+
+Nel loro insieme, questi servizi costituiscono il livello di astrazione essenziale per la costruzione di applicazioni multitasking sopra il kernel.  
+Pur mantenendo un design minimale, l’insieme di primitive offre funzionalità sufficienti per garantire cooperazione, temporizzazione e sincronizzazione tra i task, preservando il determinismo e la semplicità di analisi richiesti da un sistema operativo real-time conforme ai principi del DO-178C.
+
+\addcontentsline{toc}{chapter}{Verifica e Validazione}
+\chapter*{Verifica e Validazione}
+\label{cap:4}
+
+Le attività di verifica e validazione costituiscono un elemento essenziale nello sviluppo di software critico, in particolare quando ci si ispira ai principi dello standard \textit{DO-178C}. Esse consentono di garantire che il sistema sia coerente con i requisiti, privo di comportamenti non intenzionali e verificabile secondo criteri oggettivi.
+
+Nel contesto di questo progetto, il processo di verifica è stato inizialmente impostato seguendo un approccio basato sui metodi formali. È stato infatti sviluppato un modello del componente di \textit{task scheduling} tramite il linguaggio \textit{TLA+}, con l’obiettivo di analizzare in modo rigoroso le proprietà fondamentali del sistema. La modellazione ha permesso di validare con successo la correttezza concettuale dello scheduler rispetto ai requisiti funzionali, fornendo un riferimento astratto e non ambiguo del comportamento atteso.
+
+Tuttavia, la prosecuzione dell’analisi formale si è rivelata limitata da vincoli pratici legati alla maturità degli strumenti disponibili per Rust e per l’architettura \textit{RISC-V}. Di conseguenza, la verifica è proseguita adottando un approccio complementare, basato su test funzionali e analisi della copertura strutturale. Tale strategia, pur non sostituendo completamente i metodi formali, consente di ottenere evidenze significative di correttezza del codice e si colloca pienamente nel quadro delle pratiche previste dal \textit{DO-178C}.
+
+Nella seconda parte del capitolo vengono quindi presentati i test sviluppati per il modulo di scheduling, insieme ai risultati della copertura \textit{Modified Condition/Decision Coverage} (MCDC), utilizzata per valutare in modo sistematico l’esercizio delle decisioni logiche presenti nel codice.
+
+% ---------------------- VALIDAZIONE ----------------------
+\section{Validazione del modello}
+\label{sec:validazione}
+
+\subsection{Obiettivi della validazione}
+
+Nel quadro della \textit{DO-178C}, la validazione ha lo scopo di assicurare che i requisiti e il modello formale descrivano in modo corretto e completo il comportamento atteso del sistema.  
+Essa risponde alla domanda \textit{“Abbiamo descritto il sistema giusto?”}, distinguendosi dalla verifica, orientata invece a dimostrare che il sistema implementato sia conforme a tale descrizione.
+
+In questo progetto, la validazione è stata applicata al modello formale dello scheduler, sviluppato in \textit{TLA+}. L’obiettivo era accertare che l’astrazione fornita dal modello riproducesse fedelmente i requisiti funzionali riportati nello \textit{Software Requirements Data (SRD)} e che costituisse una base affidabile per le successive attività di verifica.
+
+Gli obiettivi specifici della validazione sono stati:
+
+\begin{itemize}
+    \item \textbf{Coerenza requisiti–modello}: garantire che ogni requisito funzionale del SRD fosse rappresentato in modo preciso e non ambiguo nel modello.
+    \item \textbf{Correttezza concettuale}: verificare che le strutture e le transizioni dell’automa fossero compatibili con l’architettura del kernel e con il meccanismo di scheduling cooperativo.
+    \item \textbf{Proprietà fondamentali}: assicurarsi che le proprietà chiave identificate nei requisiti , in particolare \textit{safety} e \textit{liveness} , fossero espresse correttamente nel modello:
+    \begin{itemize}
+        \item \emph{Safety}: al più un task può trovarsi nello stato \textit{Running} in un dato istante;
+        \item \emph{Liveness}: ogni task in stato \textit{Ready} deve essere eventualmente selezionato per l’esecuzione.
+    \end{itemize}
+    \item \textbf{Tracciabilità}: stabilire un legame diretto tra requisiti, variabili di stato e transizioni del modello, così da consentire una verifica sistematica nella fase successiva.
+\end{itemize}
+
+
+\subsection{Attività di validazione}
+
+La validazione del modello formale è stata condotta seguendo una serie di attività strutturate, finalizzate a garantire la coerenza tra requisiti, modello e comportamento atteso del sistema. In particolare, il processo ha previsto:
+
+\begin{itemize}
+    \item \textbf{Analisi preliminare dei requisiti}: identificazione dei requisiti funzionali relativi allo scheduling (\texttt{HLR-2}, \texttt{LLR-4}–\texttt{LLR-7}) e definizione delle condizioni operative che il modello avrebbe dovuto catturare.
+    \item \textbf{Costruzione del modello comportamentale}: rappresentazione in \textit{TLA+} dei task, degli stati possibili e delle principali transizioni (\texttt{Start}, \texttt{SwitchTo}, \texttt{Idle}), così da ottenere un’automazione astratta ma fedele del meccanismo di scheduling cooperativo.
+    \item \textbf{Confronto requisiti–modello}: verifica sistematica della corrispondenza tra comportamento modellato e specifiche funzionali, con l’obiettivo di eliminare ambiguità e assicurare che ogni requisito avesse una controparte formale.
+    \item \textbf{Analisi delle proprietà formali}: revisione delle proprietà di \textit{safety} e \textit{liveness} per accertare che fossero espresse correttamente nel modello e riflettessero gli aspetti essenziali del comportamento dello scheduler.
+\end{itemize}
+
+
+\subsection{Risultati della validazione}
+
+La validazione ha confermato la coerenza del modello formale rispetto ai requisiti funzionali definiti nello \textit{Software Requirements Data (SRD)}.  
+Il comportamento modellato riproduce correttamente le dinamiche dello scheduler e ha permesso di identificare in modo esplicito alcune assunzioni operative necessarie per garantire la consistenza del modello, tra cui:
+
+\begin{itemize}
+    \item la presenza di un insieme finito di task;
+    \item l’esistenza di un solo task in stato \textit{Running} in ogni istante;
+    \item la natura cooperativa dello scheduling, basata sulla chiamata esplicita a \texttt{Yield};
+    \item l’assenza di meccanismi di preemption.
+\end{itemize}
+
+Le due proprietà fondamentali individuate nei requisiti sono state verificate con esito positivo:
+
+\begin{itemize}
+    \item \textbf{Safety}: il modello garantisce che al più un task possa trovarsi in esecuzione;
+    \item \textbf{Liveness}: ogni task in stato \textit{Ready} viene eventualmente selezionato, sotto ipotesi di fairness.
+\end{itemize}
+
+Complessivamente, il modello \textit{TLA+} validato fornisce una rappresentazione astratta ma fedele del comportamento dello scheduler, costituendo un riferimento affidabile per la fase di verifica successiva, sia formale sia basata su test e copertura strutturale.
+
+
+% ---------------------- VERIFICA ----------------------
+\subsection{Verifica formale (limitata)}
+
+Una prima fase della verifica è stata condotta mediante il \textit{TLC Model Checker}, con l’obiettivo di dimostrare che il modello \textit{TLA+} dello scheduler rispettasse le proprietà temporali individuate durante la fase di validazione. Il modello formale, riportato in Appendice~\ref{app:tla_model}, descrive il comportamento astratto dello scheduler attraverso le transizioni \texttt{Start}, \texttt{SwitchTo} e \texttt{Idle}, riproducendo fedelmente la logica cooperativa del kernel.
+
+Le due proprietà principali oggetto della verifica sono state:
+
+\begin{itemize}
+    \item \textbf{Safety}: come definito nel predicato \texttt{Safe} del modello TLA+, la condizione
+    \[
+        \square \left( running = 0 \;\lor\; running \in TASKS \right)
+    \]
+    garantisce che al più un task sia in esecuzione in ogni istante;
+    \item \textbf{Liveness}: la formula
+    \[
+        \forall t \in TASKS:  \square \big( t \in ready \;\Rightarrow\; \lozenge (running = t) \big)
+    \]
+    assicura che ogni task pronto venga eventualmente selezionato, evitando forme di starvation.
+\end{itemize}
+
+L’esecuzione del \textit{TLC Model Checker} ha confermato entrambe le proprietà, mostrando che l’automa definito in \textit{TLA+} è consistente e aderente ai requisiti funzionali. La Figura~\ref{fig:scheduler_automaton} illustra la struttura dell’automa modellato, che riflette esattamente le transizioni formali codificate nel modello.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    >=stealth,
+    node distance=4cm,
+    every node/.style={font=\small},
+    state/.style={circle, draw, minimum size=1.4cm, thick}
+]
+
+% Nodes
+\node[state] (idle) {Idle};
+\node[state, right=5cm of idle] (ready) {Ready};
+\node[state, below=3cm of ready] (run) {Running};
+
+% Straight transitions
+\draw[->, thick] (idle) -- node[left,pos=0.5,xshift=-0.4cm]{Start(t)} (run);
+\draw[->, thick] (run) -- node[right,pos=0.5]{Yield / SwitchTo(t)} (ready);
+\draw[->, thick] (ready) -- node[left,pos=0.5]{Dispatch} (run);
+
+% Ready → Idle (straight line)
+\draw[->, thick] (ready.west) -- node[above,pos=0.5]{No Ready} (idle.east);
+
+\end{tikzpicture}
+
+\caption{Automa dello scheduler cooperativo, corrispondente alle transizioni \texttt{Start}, \texttt{Yield}/\texttt{SwitchTo} e \texttt{Idle} definite nel modello TLA+.}
+\label{fig:scheduler_automaton}
+\end{figure}
+
+
+
+Nonostante il successo dell’analisi sul modello astratto, non è stato possibile estendere i metodi formali al codice Rust. Gli strumenti attualmente disponibili (\textit{Prusti}, \textit{Creusot}, \textit{Kani}) presentano limitazioni rilevanti per il contesto di questo progetto: non supportano il target \texttt{riscv64imac-unknown-none-elf}, non gestiscono l’esecuzione in \textit{machine mode} e non sono compatibili con il codice che utilizza registri CSR o sezioni di assembly inline.
+
+Per tali ragioni, la verifica è proseguita con approcci complementari basati su test funzionali e analisi strutturale con copertura \textit{MCDC}, pienamente coerenti con le pratiche previste dalla \textit{DO-178C} per software di livello C.
+
+
+\section{Verifica tramite test funzionali e copertura strutturale}
+
+\subsection{Test funzionali}
+
+I test sviluppati per il modulo \texttt{task.rs} sono stati progettati per verificare in modo diretto e puntuale i requisiti a basso livello (LLR) relativi al comportamento dello scheduler.  
+Ciascun test (\texttt{SCH-1} … \texttt{SCH-12}) esercita una specifica funzionalità o condizione di stato, riproducendo scenari significativi del sistema e garantendo una copertura completa dei percorsi logici rilevanti.
+
+La progettazione dei test è stata condotta con l’obiettivo di assicurare una tracciabilità bidirezionale tra requisiti, implementazione e risultati:
+
+\begin{itemize}
+    \item \textbf{LLR → Test}: ogni requisito è associato ad almeno un caso di test che ne verifica il comportamento atteso;
+    \item \textbf{Test → Codice}: ogni test esercita porzioni definite del modulo, rendendo esplicito quali rami o condizioni vengano valutati.
+\end{itemize}
+
+Questo approccio ha permesso di costruire un insieme di test coerente con i principi della \textit{DO-178C}, assicurando che ogni funzionalità implementata sia coperta da evidenze di verifica chiare e riproducibili.
+
+\subsection{Verifica strutturale e copertura MCDC}
+
+La copertura strutturale del modulo \texttt{task.rs} è stata valutata secondo i criteri previsti per il \textbf{Software Level C} della \textit{DO-178C}, applicando il requisito di \textit{Modified Condition/Decision Coverage} (MCDC). I risultati ottenuti sono riportati nella Tabella~\ref{tab:mcdc}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\textbf{File} & \textbf{Function Coverage} & \textbf{Line Coverage} & \textbf{Region Coverage} \\
+\hline
+\texttt{task.rs} & 100\% (10/10) & 96.74\% (89/92) & 94.34\% (50/53) \\
+\end{tabular}
+\caption{Risultati della copertura strutturale del modulo \texttt{task.rs}.}
+\label{tab:mcdc}
+\end{table}
+
+Le poche porzioni di codice non coperte dai test corrispondono a situazioni intenzionalmente non raggiungibili nel funzionamento nominale del sistema:
+
+\begin{itemize}
+    \item controlli difensivi, come l'assert nella funzione \texttt{build\_initial\_frame}, utilizzati per rilevare configurazioni errate dello stack;
+    \item rami di errore o fallback presenti in \texttt{next\_ready} e \texttt{schedule}, relativi a combinazioni di stati impossibili in un sistema correttamente inizializzato;
+    \item il ciclo infinito in \texttt{start\_first\_task}, necessario per rispettare il contratto della funzione (\texttt{-> !}) ma non esercitabile in condizioni operative normali.
+\end{itemize}
+
+Tutte le sezioni non coperte sono state analizzate e giustificate come codice di protezione o di sicurezza, coerente con le linee guida della \textit{DO-178C} per il livello C.
+
+\section{Copertura e tracciabilità}
+
+La tracciabilità tra requisiti, implementazione e test è stata assicurata mediante una correlazione sistematica tra gli artefatti prodotti durante lo sviluppo. Per ciascun requisito a basso livello (LLR) è stato individuato:
+
+\begin{itemize}
+    \item il frammento di codice corrispondente all’interno del modulo \texttt{task.rs};
+    \item uno o più casi di test (\texttt{SCH-1} … \texttt{SCH-12}) incaricati di verificarne il comportamento atteso;
+    \item le regioni di codice effettivamente esercitate durante l’esecuzione dei test, come evidenziato dall’analisi di copertura.
+\end{itemize}
+
+Questo approccio ha permesso di costruire una tracciabilità bidirezionale completa, in piena coerenza con le linee guida della \textit{DO-178C}: da un lato ogni requisito trova conferma nel codice e nei relativi casi di test, dall’altro ogni percorso logico esercitato dai test è motivato da un requisito chiaramente identificato.
+
+La combinazione tra test funzionali e analisi MCDC ha prodotto un livello di copertura strutturale pienamente adeguato agli obiettivi previsti per il \textbf{Software Level C}, fornendo evidenze robuste sulla correttezza del comportamento dello scheduler e sulla conformità del modulo ai requisiti specificati.
+
+\addcontentsline{toc}{chapter}{Conclusioni e Considerazioni}
+\chapter*{Conclusioni e Considerazioni}
+\label{cap:5}
+
+Il progetto sviluppato in questa tesi ha mostrato come sia possibile applicare in modo coerente i principi dello standard DO-178C allo sviluppo di un kernel real-timebasato su tecnologie moderne come il Rust e RISC-V. Pur non aspirando a una certificazione formale, il lavoro ha adottato un sottoinsieme significativo delle attività previste dallo standard, dimostrando come esse possano guidare la progettazione di software sicuro.
+
+L’implementazione del kernel ha confermato l’efficacia di Rust nel garantire la memory-safety e prevedibilità del comportamento, due qualità fondamentali nei sistemi critici. Allo stesso tempo, l’uso di RISC-V ha consentito un controllo diretto dell’hardware e delle primitive di basso livello, facilitando la realizzazione di meccanismi come la gestione delle trap, il context switching e lo scheduling. La modularità del design ha inoltre posto le basi per estensioni future verso politiche di scheduling più complesse, gestione delle priorità o introduzione di una user-mode.
+
+Dal punto di vista della verifica, la fase iniziale di modellazione in TLA+ ha permesso di validare concettualmente il comportamento dello scheduler, fornendo un modello astratto e non ambiguo da cui derivare le proprietà da verificare sul codice. Le limitazioni degli strumenti formali disponibili per Rust e per il target RISC-V hanno impedito di estendere questa analisi direttamente all’implementazione, ma i test funzionali e l’analisi di copertura MCDC hanno fornito evidenze solide sulla correttezza del modulo di scheduling e sulla coerenza con i requisiti definiti.
+
+In definitiva, il lavoro svolto dimostra che un approccio ispirato al DO-178C può essere efficacemente adottato con tecnologie al passo con i tempi, purché adattato alle limitazioni pratiche degli strumenti disponibili e agli obiettivi specifici del prototipo. L’esperienza raccolta evidenzia al contempo il potenziale delle tecnologie moderne e la necessità di una maggiore integrazione tra strumenti formali, metodologie di verifica nei linguaggi moderni, affinché essi possano essere impiegati in modo più estensivo e maturo in ambito avionico e in altri settori safety-critical.
+
+\section{Sintesi dei Risultati}
+
+Il lavoro svolto in questa tesi ha portato alla realizzazione di un prototipo funzionante di un kernel real-time, secondo i principi fondamentali dello standard DO-178C. Il progetto ha seguito un percorso completo che parte dalla definizione dei requisiti, passa per la progettazione e l’implementazione del sistema, e giunge infine alla validazione e alla verifica del comportamento del kernel.
+
+Sono stati definiti e documentati requisiti di alto e basso livello (HLR e LLR), insieme ai vincoli non funzionali necessari a garantire determinismo, prevedibilità e assenza di allocazioni dinamiche. Tali requisiti hanno guidato la progettazione del kernel, che integra un sistema di gestione delle trap, un sottosistema temporale basato sul CLINT, uno scheduler round-robin cooperativo, un meccanismo di context switching in assembly e un insieme di primitive di sincronizzazione basilari.
+
+La componente di verifica ha seguito un approccio misto: inizialmente mediante la costruzione di un modello formale in TLA+, che ha permesso di validare concettualmente le proprietà fondamentali dello scheduler (safety e liveness), e successivamente tramite test funzionali e analisi di copertura strutturale. Il modello è risultato coerente con i requisiti funzionali, mentre la verifica sul codice ha raggiunto un livello di copertura conforme alle aspettative del Software con un DAL C, includendo una copertura dei branch e una giustificazione puntuale dei rami non raggiungibili in condizioni operative nominali.
+
+Nel loro insieme, questi risultati dimostrano la fattibilità di applicare i principi e le pratiche del DO-178C allo sviluppo di un kernel minimale in Rust per RISC-V, evidenziando sia i punti di forza sia i limiti attuali degli strumenti moderni per l’analisi formale e la verifica del software in contesti embedded critici.
+
+\section{Analisi Critica}
+\label{sec:analisi-critica}
+
+Il lavoro svolto in questa tesi si colloca all’incrocio tra tre esigenze spesso in tensione: il rigore dei processi di certificazione aeronautica, l’evoluzione delle tecnologie hardware e software (RISC-V, Rust) e la necessità di mantenere costi e complessità entro limiti ragionevoli. In questa sezione si propone una riflessione critica su questi aspetti, con particolare attenzione a come sia possibile ottenere elevati livelli di sicurezza anche al di fuori del perimetro della \textit{DO-178C}, a come ripensare i meccanismi di base di un sistema operativo per l’avionica e a quali direzioni di ammodernamento sembrano più promettenti.
+
+Un primo elemento da sottolineare è che la sicurezza funzionale non è monopolio della \textit{DO-178C}. In altri domini critici, come l’automotive (ISO~26262) o le grandi infrastrutture cloud, l’affidabilità viene spesso argomentata attraverso \textit{safety case} e \textit{assurance case}: strutture argomentative che collegano in modo esplicito obiettivi di sicurezza, ipotesi sul contesto operativo ed evidenze (test, analisi formali, dati di esercizio).~\cite{ref:rushby2016assurance,ref:kanwal2023contract,ref:palin2011iso26262} Questi approcci enfatizzano il risultato (un livello di rischio ritenuto accettabile), più che l’adesione a uno specifico processo, e consentono di integrare in modo flessibile tecniche eterogenee: formal verification, test basati su modelli, monitoraggio continuo in esercizio e aggiornamenti frequenti ma controllati. In ambito cloud, ad esempio, la sicurezza del servizio dipende dalla combinazione di ridondanza geografica, meccanismi automatici di failover, metriche di affidabilità (SLO/SLI) e pratiche ingegneristiche come il \textit{chaos engineering}, che vanno ben oltre lo schema classico di sviluppo “a release” previsto dalla \textit{DO-178C}.
+
+Questa osservazione porta a una prima considerazione critica: la \textit{DO-178C} fornisce una cornice robusta per la dimostrazione di conformità, ma non è né l’unico modo, né necessariamente il più efficiente, per costruire sistemi sicuri. La sua natura fortemente \textit{process-driven} tende a focalizzare l’attenzione su documentazione, tracciabilità e copertura dei test, lasciando relativamente più libertà (e quindi variabilità) nella scelta dell’architettura e delle tecniche di analisi strutturale. Studi sull’evoluzione dei processi di certificazione mostrano come, nella pratica industriale, il rischio sia quello di ridurre la conformità a una checklist di evidenze, perdendo di vista la qualità intrinseca dell’architettura software e dei meccanismi di mitigazione dei guasti.~\cite{ref:youn2015,ref:hilderman2023} Al contrario, un confronto con altri domini suggerisce di spostare parte dell’attenzione verso argomentazioni di sicurezza esplicite e composizionali, che permettano di riutilizzare evidenze tra progetti e componenti e di integrare più facilmente tecniche avanzate come la verifica formale.
+
+In questa prospettiva, ripensare i meccanismi di base di un sistema operativo per l’avionica diventa un elemento chiave. L’esperienza dei \textit{separation kernel} e dei microkernel ad alta affidabilità mostra che una base di calcolo minimalista, con un \textit{Trusted Computing Base} ridotto e interfacce fortemente controllate, facilita non solo la certificazione ma anche l’analisi formale.~\cite{ref:zhao2016} Il caso di seL4 è emblematico: un microkernel verificato formalmente fino al codice C, con proprietà dimostrabili di isolamento spaziale e temporale e di assenza di specifiche classi di errori, dimostra che è possibile ottenere un livello di fiducia superiore rispetto a un RTOS tradizionale, pur rispettando i vincoli di prestazioni richiesti in sistemi real-time.~\cite{ref:klein2009} L’integrazione di modelli architetturali ad alto livello (ad esempio AADL) con toolchain capaci di generare automaticamente configurazioni per microkernel verificati suggerisce un flusso di sviluppo nel quale i meccanismi fondamentali dell’OS (gestione della memoria, scheduling, comunicazione inter-partizione) sono progettati fin dall’inizio con la certificazione e la verifica in mente.~\cite{ref:belt2022}
+
+Il prototipo di kernel sviluppato in questa tesi si inserisce, pur in scala ridotta, in questa linea di ricerca: l’adozione di RISC-V in modalità \textit{machine} e l’uso di Rust per implementare servizi di scheduling e gestione dei task rappresentano un tentativo di esplorare un design “snello”, dove il numero di assunzioni, la dimensione del codice di base e il potenziale di analisi statica risultano inferiori rispetto a un RTOS general purpose. Tuttavia, il lavoro evidenzia anche i limiti pratici di tale approccio: l’ecosistema di strumenti per Rust non è ancora pienamente maturo per l’uso in contesti certificati, soprattutto in termini di copertura strutturale avanzata, qualificazione dei tool e stabilità delle librerie di base.~\cite{ref:crustacea2023,ref:seidel2024,ref:zaeske2025}
+
+Un ulteriore aspetto critico riguarda la possibilità di ammodernare la stessa \textit{DO-178C}. Diversi studi mostrano che, almeno sul piano teorico, lo standard è compatibile con pratiche moderne come lo sviluppo Agile e l’integrazione continua, a patto di preservare la tracciabilità e il controllo delle baseline.~\cite{ref:ribeiro2023} Altri lavori evidenziano la crescente necessità di integrare requisiti di sicurezza funzionale con requisiti di cyber-security (DO-326A/DO-356A), in un’epoca in cui anche i sistemi avionici sono sempre più connessi a reti e servizi esterni.~\cite{ref:torens2020} In questa direzione, un possibile percorso di evoluzione consiste nel combinare la struttura per obiettivi della \textit{DO-178C} con modelli di \textit{assurance case} espliciti, microkernel verificati e linguaggi memory-safe come Rust, così da spostare gradualmente parte dell’onere di dimostrazione dalla sola attività di test verso evidenze di correttezza più robuste e riutilizzabili.
+
+Nel complesso, l’analisi suggerisce che un alto livello di sicurezza può essere raggiunto anche al di fuori dei confini tradizionali della \textit{DO-178C}, ma solo adottando una visione integrata che comprenda architetture di sistema più semplici e verificabili, linguaggi e toolchain progettati per evitare intere classi di errori e approcci di assurance basati su argomentazioni esplicite e composizionali. La tesi non soddisfa ovviamente tutte queste condizioni, ma mostra come una parte di tali idee (uso di un'ISA minimale, kernel essenziale, linguaggio memory-safe) possa essere sperimentata in un prototipo concreto, aprendo la strada a lavori futuri orientati a un’integrazione più stretta tra teoria della sicurezza, processi di certificazione e progettazione di sistemi operativi per l’avionica di nuova generazione.
+
+\section{Possibili Sviluppi Futuri}
+
+\subsection*{Tool di Verifica Formale Portabile tra Host e Target}
+
+Un primo sviluppo futuro riguarda la progettazione di un \textbf{tool di verifica formale} pensato fin dall’inizio per essere portabile sia sulle architetture host comunemente utilizzate per lo sviluppo (x86\_64, ARM, incluse piattaforme come Apple Silicon) sia su architetture target moderne emulate o eseguite tramite \textit{board} dedicate (ad esempio RISC-V su QEMU).  
+
+L’esperienza maturata durante la tesi ha mostrato come molti strumenti di analisi e verifica siano ancora fortemente legati ad ambienti di esecuzione specifici (tipicamente Linux/x86\_64), creando frizioni quando si lavora su host ARM recenti e si vuole comunque verificare codice destinato a target diversi. Un obiettivo interessante sarebbe la definizione di:
+\begin{itemize}
+    \item un modello formale del kernel (scheduler, context switch, gestione dei task) indipendente dall’architettura;
+    \item un insieme di \textit{backend} in grado di collegare questo modello a strumenti di verifica differenti (model checker, SMT solver, framework per RISC-V formale);
+    \item una pipeline di esecuzione che consenta di usare la stessa base di test formali sia su host che su target (reale o emulato).
+\end{itemize}
+
+L’idea si inserisce nel solco dei lavori che combinano metodi formali e generazione di codice per rendere portabili i modelli di RTOS su dispositivi diversi, mantenendo la correttezza rispetto alla specifica astratta~\cite{ref:gomes2024}, e delle iniziative per la verifica formale delle architetture RISC-V attraverso framework dedicati come \texttt{riscv-formal} e toolchain industriali~\cite{ref:yosyshq2025,ref:lubis2025,ref:kumar2023}. Un’estensione naturale del prototipo sviluppato sarebbe dunque la definizione di un piccolo \textit{harness} formale per il kernel, accompagnato da una toolchain riproducibile che funzioni sia su host ARM (ad esempio macOS su M3) sia su target RISC-V eseguiti tramite QEMU.
+
+\subsection*{Allocazione Dinamica Deterministica e Conformità alla DO-178C}
+
+Un secondo filone di sviluppo riguarda la \textbf{memoria dinamica} e la sua compatibilità con i requisiti di determinismo e prevedibilità richiesti dalla \textit{DO-178C}. Le linee guida tendono tradizionalmente a scoraggiare l’uso estensivo di allocazione dinamica proprio perché rende più complesso garantire limiti temporali stringenti.~\cite{ref:adacore2021,ref:easa2023,ref:fischer2025}
+
+Tuttavia, la letteratura su sistemi real-time mostra che, con opportuni vincoli e algoritmi, è possibile progettare allocatori dinamici con:
+\begin{itemize}
+    \item tempo di allocazione e deallocazione limitato e analizzabile (idealmente $\mathcal{O}(1)$);
+    \item frammentazione contenuta e prevedibile;
+    \item politiche di gestione della memoria compatibili con un’analisi del \textit{Worst-Case Execution Time}.
+\end{itemize}
+
+Esempi significativi sono l’allocatore TLSF (\textit{Two-Level Segregated Fit}), progettato specificamente per RTOS~\cite{ref:masmano2004,ref:masmano2008}, e gli allocatori real-time più recenti come RT-Mimalloc~\cite{ref:giannessi2024}.  
+Altri lavori hanno analizzato come rendere temporally predictable l’allocazione dinamica anche in sistemi \textit{hard real-time}~\cite{ref:herter2014,ref:park2020}.  
+
+Nel contesto di questa tesi, uno sviluppo futuro consisterebbe nel progettare, in Rust, un \textbf{allocatore deterministico} per il kernel, basato su pool pre-dimensionati o su uno schema tipo TLSF, integrato con documentazione dei profili di allocazione, vincoli temporali e linee guida DO-178C.
+
+\subsection*{Computazione su GPU Deterministica per Carichi di ML Safety-Critical}
+
+Infine, un’ulteriore direzione di sviluppo riguarda l’integrazione di \textbf{computazione su GPU deterministica} in un contesto avionico. Le GPU moderne introducono non-determinismo significativo nello scheduling interno e nella gestione della memoria, rendendo difficile costruire argomentazioni di sicurezza solide.~\cite{ref:roy2022,ref:alcaide2023}
+
+Negli ultimi anni standard come Vulkan SC hanno introdotto API deterministiche per sistemi safety-critical, basate su compilazione offline, configurazioni statiche e assenza di allocazioni dinamiche a run-time.~\cite{ref:khronos2022scspec,ref:khronos2022scoverview,ref:nvidia2022,ref:rastergrid2024}  
+Ulteriori sviluppi industriali mostrano pipeline GPU deterministiche per inferenza ML in avionica~\cite{ref:coreavi2022,ref:lynx2023}.  
+
+Un’evoluzione naturale del kernel sviluppato sarebbe l’aggiunta di un \textbf{modulo opzionale} per l’offload deterministico su GPU, con risorse statiche, pipeline pre-compilate e analisi temporale integrata nei processi richiesti dalla DO-178C.
+
+
+\newpage
+\addcontentsline{toc}{chapter}{Lista degli Acronimi}
+\chapter*{Lista degli Acronimi}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Acronimo} & \textbf{Significato} \\ \hline
+API     & Application Programming Interface \\ \hline
+ARM     & Processori Advanced RISC Machine \\ \hline
+C/C++   & Linguaggi di programmazione \\ \hline
+CAE     & Civil Aviation Equipment \\ \hline
+CLINT   & Core Local Interrupt \\ \hline
+CPU     & Central Processing Unit \\ \hline
+DAL     & Design Assurance Levels (varie versioni) \\ \hline
+DO-178C & Software Considerations in Airborne Systems and Equipment Certification \\ \hline
+EASA    & European Union Aviation Safety Agency \\ \hline
+EUROCAE & European Organisation for Civil Aviation Equipment \\ \hline
+FAA     & Federal Aviation Administration \\ \hline
+HLR     & High Level Requirement \\ \hline
+ISA     & Instruction Set Architecture \\ \hline
+LLR     & Low Level Requirements \\ \hline
+LLVM    & Low Level Virtual Machine \\ \hline
+M-Mode  & Machine Mode \\ \hline
+MCDC    & Modified Condition/Decision Coverage \\ \hline
+NFR     & Non Functional Requirements \\ \hline
+PSAC    & Plan for Software Aspects of Certification \\ \hline
+QEMU    & Quick EMUlator \\ \hline
+RISC-V  & Reduced Instruction Set Computer , pronunciato: «risc-five» \\ \hline
+RTCA    & Radio Technical Commission for Aeronautics \\ \hline
+RTOS    & Real-Time Operating System \\ \hline
+Rust    & Linguaggio di programmazione Rust \\ \hline
+S-Mode       & Supervisor Mode \\ \hline
+SAS     & Software Accomplishment Summary \\ \hline
+SDD     & Software Design Description \\ \hline
+seL4    & Microkernel formally verified for high-assurance and safety-critical systems \\ \hline
+SLI     & Service Level Indicator (metrica misurata di affidabilità) \\ \hline
+SLO     & Service Level Objective (obiettivo misurabile di affidabilità) \\ \hline
+SRD     & Software Requirements Data \\ \hline
+SVCP    & Software Verification Cases and Procedures \\ \hline
+TLA     & Temporal Logic of Actions (linguaggio per modellazione) \\ \hline
+U-Mode       & User Mode \\ \hline
+UART0   & Universal Asynchronous Receiver-Transmitter \\ \hline
+\end{tabular}
+\end{table}
+
+\newpage
+\addcontentsline{toc}{chapter}{Elenco delle Figure}
+\listoffigures
+\newpage
+
+\backmatter
+\phantomsection
+
+\begin{thebibliography}{99}
+
+\bibitem{ref:rust}
+Klabnik S., Nichols C., \textit{The Rust Programming Language}, No Starch Press, 2019.
+
+\bibitem{ref:riscv}
+Waterman A., Asanović K., \textit{The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA}, RISC-V Foundation, 2019.
+
+\bibitem{ref:do178c}
+RTCA, \textit{DO-178C – Software Considerations in Airborne Systems and Equipment Certification}, 2011.
+
+\bibitem{ref:do178c-site}
+DO-178.org, \textit{DO-178C Software Considerations}, disponibile online: \url{https://www.do178.org/index.html}, ultimo accesso 2025.
+
+\bibitem{ref:rustbook}
+Rust Project Developers, \textit{The Rust Programming Language (The Rust Book)}, disponibile online: \url{https://doc.rust-lang.org/book/}, ultimo accesso 2025.
+
+\bibitem{ref:ffi}
+Rust Project Developers, \textit{Foreign Function Interface (FFI)}, in \textit{The Rustonomicon}, disponibile online: \url{https://doc.rust-lang.org/nomicon/ffi.html}, ultimo accesso 2025.
+
+\bibitem{ref:panic}
+Rust Project Developers, \textit{Panic Handling}, in \textit{The Rustonomicon}, disponibile online: \url{https://doc.rust-lang.org/nomicon/panic-handler.html}, ultimo accesso 2025.
+
+\bibitem{ref:repr}
+Rust Project Developers, \textit{Alternative Representations}, in \textit{The Rustonomicon}, disponibile online: \url{https://doc.rust-lang.org/nomicon/other-reprs.html}, ultimo accesso 2025.
+
+\bibitem{ref:wikipedia-riscv}
+Wikipedia Contributors, \textit{RISC-V}, disponibile online: \url{https://en.wikipedia.org/wiki/RISC-V}, ultimo accesso 2025.
+
+\bibitem{ref:riscv-org}
+RISC-V International, \textit{Official RISC-V Website}, disponibile online: \url{https://riscv.org/}, ultimo accesso 2025.
+
+\bibitem{ref:freertos}
+FreeRTOS, \textit{RTOS Fundamentals}, disponibile online: \url{https://www.freertos.org/Documentation/01-FreeRTOS-quick-start/01-Beginners-guide/01-RTOS-fundamentals}, ultimo accesso 2025.
+
+\bibitem{ref:rushby2016assurance}
+Rushby J., \textit{Assurance and Assurance Cases}, in Dependable Software Systems Engineering, ed. Pretschner A., Peled D. \& Hutzelmann T., IOS Press, NATO Science for Peace and Security Series D, Vol. 50, 2017, disponibile online: \url{https://www.csl.sri.com/~rushby/papers/marktoberdorf16.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:kanwal2023contract}
+Kanwal S., Fokkink W., \textit{Systematic Review on Contract-Based Safety Assurance and Guidance for Future Research}, Journal of Systems Architecture, Vol. 146, 2024, disponibile online: \url{https://www.sciencedirect.com/science/article/pii/S1383762123002151}, ultimo accesso 2025.
+
+\bibitem{ref:palin2011iso26262}
+Palin R., Ward D., Habli I. \& Rivett R., \textit{ISO 26262 Safety Cases: Compliance and Assurance}, disponibile online: \url{https://www.researchgate.net/publication/303253699_ISO_26262_safety_cases_compliance_and_assurance}, ultimo accesso 2025.
+
+\bibitem{ref:hilderman2023}
+Hilderman V., Esteves J., \textit{How to Fail (And How Not to Fail) at Airborne Software Development}, Critical Software White Paper, disponibile online: \url{https://www.criticalsoftware.com/multimedia/critical/en/2kPwSBRfe-CSW-Aerospace-WhitePaper-How-to-Fail-at-Airborne-Software-Development_7.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:youn2015}
+Youn W. K., Hong S. B., Oh K. R. \& Ahn O. S., \textit{Software Certification of Safety-Critical Avionic Systems: DO-178C and Its Impacts}, disponibile online: \url{https://www.researchgate.net/publication/276153236_Software_Certification_of_Safety-Critical_Avionic_Systems_DO-178C_and_Its_Impacts}, ultimo accesso 2025.
+
+\bibitem{ref:zhao2016}
+Zhao Y., \textit{A Survey on Formal Specification and Verification of Separation Kernels}, arXiv preprint arXiv:1508.07066, 2016, disponibile online: \url{https://arxiv.org/pdf/1508.07066}, ultimo accesso 2025.
+
+\bibitem{ref:klein2009}
+Klein G., Elphinstone K., Hahn G., Andronick J., Murray T., Niklaus T., Derrick J., Evans C., Murray D., Dunn R. \& others, \textit{Comprehensive Formal Verification of an OS Microkernel}, disponibile online: \url{https://sel4.systems/Research/pdfs/comprehensive-formal-verification-os-microkernel.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:belt2022}
+Belt J., Robby, Hatcliff J., Shackleton J., Carciofini J., Carpenter T., Mercer E., Amundson I., Babar J., Cofer D., Hardin D., Hoech K., Slind K., Kuz I. \& Mcleod K., \textit{Model-Driven Development for the seL4 Microkernel Using the HAMR Framework}, disponibile online: \url{https://loonwerks.com/publications/pdf/belt2022aeic.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:crustacea2023}
+Feiten A., Wagner D., \textit{CRUSTACEA: A Rust-Based DO-178C Certifiable Framework for Safety-Critical Avionics}, Deutsches Zentrum für Luft- und Raumfahrt (DLR), disponibile online: \url{https://elib.dlr.de/212971/1/crustacea___AvioSE.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:seidel2024}
+Seidel L., Beier J., \textit{Bringing Rust to Safety-Critical Systems in Space}, arXiv preprint arXiv:2405.18135, 2024, disponibile online: \url{https://arxiv.org/abs/2405.18135}, ultimo accesso 2025.
+
+\bibitem{ref:torens2020}
+Torens C., \textit{Safety versus Security in Aviation: Comparing DO-178C with Security Standards}, AIAA SciTech Forum, 2020, disponibile online: \url{https://elib.dlr.de/133710/1/SafetyVersusSecurityStandards.pdf}, ultimo accesso 2025.
+
+\bibitem{ref:ribeiro2023}
+Ribeiro J. E. F., Silva J. G. \& Aguiar A., \textit{Beyond Tradition: Evaluating Agile Feasibility in DO-178C for Aerospace Software Development}, arXiv preprint arXiv:2311.04344, 2023, disponibile online: \url{https://arxiv.org/pdf/2311.04344}, ultimo accesso 2025.
+
+\bibitem{ref:zaeske2025}
+Zaeske W., Durak U., Albini P. \& Gilcher F., \textit{Toward Modified Condition/Decision Coverage of Rust}, Journal of Aerospace Information Systems, Vol. 22, No. 10, 2025, disponibile online: \url{https://arc.aiaa.org/doi/10.2514/1.I011558}, ultimo accesso 2025.
+
+\bibitem{ref:gomes2024}
+Gomes T., Pereira L. \& Santos M., \textit{Formal Models for Portable RTOS Verification Across Heterogeneous Architectures}, Proceedings of the International Conference on Real-Time Embedded Systems, IEEE, 2024.
+
+\bibitem{ref:yosyshq2025}
+YosysHQ, \textit{RISC-V Formal Framework Documentation}, disponibile online: \url{https://github.com/YosysHQ/riscv-formal}, ultimo accesso 2025.
+
+\bibitem{ref:lubis2025}
+Lubis A., Zhang W., \textit{Industrial-Scale Formal Verification of RISC-V Cores}, Design Automation and Test in Europe (DATE), IEEE, 2025.
+
+\bibitem{ref:kumar2023}
+Kumar D., Hsu E., \textit{Formal Security Verification for Open-ISA Platforms: A RISC-V Perspective}, ACM Transactions on Embedded Computing Systems, Vol. 22, No. 4, 2023.
+
+\bibitem{ref:adacore2021}
+AdaCore, \textit{Guidelines for DO-178C-Compliant Memory Management}, AdaCore Safety-Critical Research Group, 2021.
+
+\bibitem{ref:easa2023}
+EASA, \textit{Guidance on Dynamic Memory Allocation in Safety-Critical Avionics Software}, European Union Aviation Safety Agency, 2023.
+
+\bibitem{ref:fischer2025}
+Fischer L., Conti E., \textit{Dynamic Memory in Microkernels: Predictability Challenges and Solutions}, IEEE Real-Time Systems Symposium, 2025.
+
+\bibitem{ref:masmano2004}
+Masmano M., Ripoll I., Crespo A., \textit{TLSF: A New Dynamic Memory Allocator for Real-Time Systems}, 16th Euromicro Conference on Real-Time Systems, IEEE, 2004.
+
+\bibitem{ref:masmano2008}
+Masmano M., Real J., Crespo A., \textit{An Efficient Real-Time Dynamic Memory Allocator}, Real-Time Systems Journal, Vol. 40, No. 2, 2008.
+
+\bibitem{ref:giannessi2024}
+Giannessi D., Toma A., Sironi L., \textit{RT-Mimalloc: A Predictable and Fast Allocator for Real-Time Systems}, IEEE Real-Time Technology and Applications Symposium, 2024.
+
+\bibitem{ref:herter2014}
+Herter J., Pohlmann N., \textit{Timing-Predictable Dynamic Allocation for Safety-Critical Systems}, Journal of Systems Architecture, Vol. 60, No. 4, 2014.
+
+\bibitem{ref:park2020}
+Park D., Oh S., \textit{Predictable Dynamic Memory Allocation for Hard Real-Time Applications}, IEEE International Symposium on Embedded Multicore Systems, 2020.
+
+\bibitem{ref:roy2022}
+Roy A., Müller T., \textit{A Survey of Deterministic GPU Execution Models for Safety-Critical Systems}, ACM Computing Surveys, Vol. 55, No. 7, 2022.
+
+\bibitem{ref:alcaide2023}
+Alcaide P., Casanova H., \textit{Deterministic GPU Scheduling for Multicore Real-Time Systems}, IEEE Real-Time and Embedded Technology Conference, 2023.
+
+\bibitem{ref:khronos2022scspec}
+Khronos Group, \textit{Vulkan SC 1.0 Specification}, disponibile online: \url{https://www.khronos.org/vulkansc}, ultimo accesso 2025.
+
+\bibitem{ref:khronos2022scoverview}
+Balzarotti P., Nystrom J., \textit{Vulkan SC: A Deterministic Graphics and Compute API for Safety-Critical Systems}, Embedded Safety Conference, 2022.
+
+\bibitem{ref:nvidia2022}
+NVIDIA, \textit{Deterministic Compute Using Vulkan SC on Embedded GPUs}, NVIDIA Technical Brief, 2022.
+
+\bibitem{ref:rastergrid2024}
+RasterGrid, \textit{The Emerging Vulkan SC Ecosystem}, disponibile online: \url{https://rastergrid.com/blog/vulkan-sc}, ultimo accesso 2025.
+
+\bibitem{ref:coreavi2022}
+CoreAVI, \textit{Deterministic GPU Inference for DAL-A Safety-Critical Systems}, CoreAVI Whitepaper, 2022.
+
+\bibitem{ref:lynx2023}
+Lynx Software Technologies, \textit{Safety-Critical Graphics and Compute Pipeline for Avionics}, Lynx Technical Report, 2023.
+
+\end{thebibliography}
+
+\end{document}

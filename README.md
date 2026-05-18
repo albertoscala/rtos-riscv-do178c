@@ -1,4 +1,4 @@
-# Minimal RTOS for RISC-V - DO-178C Thesis Project
+# Minimal RTOS for RISC-V under DO-178C - Thesis Project
 
 A small cooperative real-time operating system targeting **RISC-V RV64** in Machine mode, written in **Rust** with assembly context-switch glue. Developed as a Computer Science thesis following the **DO-178C** software assurance standard (objectives applied to the extent relevant for an academic project).
 
